@@ -1,6 +1,6 @@
 function(add_simulator_test test_name)
     add_executable(${test_name} ${test_name}.cpp)
-    target_link_libraries(${test_name} PRIVATE simulator_core simulator_scheduler)
+    target_link_libraries(${test_name} PRIVATE simulator_core simulator_scheduler simulator_concurrent)
 
     if(MSVC)
         target_compile_options(${test_name} PRIVATE /W4 /permissive-)
@@ -24,4 +24,9 @@ add_simulator_test(test_integracion)
 add_simulator_test(test_scheduler_prioridad)
 add_simulator_test(test_scheduler_empate)
 add_simulator_test(test_scheduler_aging)
+add_simulator_test(test_concurrent_basic)
+add_simulator_test(test_concurrent_pause)
+add_simulator_test(test_concurrent_cancel)
+add_simulator_test(test_concurrent_thread_shutdown)
+add_simulator_test(test_concurrent_race_safety)
 

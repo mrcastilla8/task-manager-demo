@@ -22,19 +22,33 @@ add_library(simulator_scheduler
 
 target_include_directories(simulator_scheduler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
+find_package(Threads REQUIRED)
+
+add_library(simulator_concurrent
+    concurrent/ProcessThread.cpp
+    concurrent/ConcurrentEngine.cpp
+)
+
+target_include_directories(simulator_concurrent PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(simulator_concurrent PUBLIC simulator_core simulator_scheduler Threads::Threads)
+
 if(MSVC)
     target_compile_options(simulator_core PRIVATE /W4 /permissive-)
     target_compile_options(simulator_scheduler PRIVATE /W4 /permissive-)
+    target_compile_options(simulator_concurrent PRIVATE /W4 /permissive-)
     if(SIMULATOR_WARNINGS_AS_ERRORS)
         target_compile_options(simulator_core PRIVATE /WX)
         target_compile_options(simulator_scheduler PRIVATE /WX)
+        target_compile_options(simulator_concurrent PRIVATE /WX)
     endif()
 else()
     target_compile_options(simulator_core PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(simulator_scheduler PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(simulator_concurrent PRIVATE -Wall -Wextra -Wpedantic)
     if(SIMULATOR_WARNINGS_AS_ERRORS)
         target_compile_options(simulator_core PRIVATE -Werror)
         target_compile_options(simulator_scheduler PRIVATE -Werror)
+        target_compile_options(simulator_concurrent PRIVATE -Werror)
     endif()
 endif()
 
