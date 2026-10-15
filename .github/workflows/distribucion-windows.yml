@@ -1,0 +1,91 @@
+name: Paquete portable Windows
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    steps:
+      - name: Obtener código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Instalar Qt 6.8.3 MinGW x64
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: windows
+          target: desktop
+          arch: win64_mingw
+          tools: 'tools_mingw1310'
+          cache: true
+
+      - name: Compilar y ejecutar CTest completo
+        shell: pwsh
+        run: |
+          . ./scripts/EntornoQtWindows.ps1
+          $qt = Find-Qt6MinGwRoot $env:QT_ROOT
+          $toolchain = Find-QtMinGwCompiler $qt
+          $env:PATH = "$($toolchain.Bin);$(Join-Path $qt 'bin');$env:PATH"
+          cmake -S . -B build-ci-validation -G 'MinGW Makefiles' `
+            "-DCMAKE_CXX_COMPILER=$($toolchain.Compiler)" `
+            "-DCMAKE_MAKE_PROGRAM=$($toolchain.Make)" `
+            "-DCMAKE_PREFIX_PATH=$qt" `
+            -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON `
+            -DSIMULATOR_WARNINGS_AS_ERRORS=ON -DSIMULATOR_BUILD_GUI_PREVIEW=ON
+          if ($LASTEXITCODE -ne 0) { throw 'Falló la configuración Qt.' }
+          cmake --build build-ci-validation --config Release --parallel 2
+          if ($LASTEXITCODE -ne 0) { throw 'Falló el build Qt.' }
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          ctest --test-dir build-ci-validation -C Release --output-on-failure -j 2
+          if ($LASTEXITCODE -ne 0) { throw 'Falló la suite CTest.' }
+
+      - name: Preparar ZIP portable Release
+        shell: pwsh
+        run: ./scripts/crear-distribucion-windows.ps1
+
+      - name: Calcular SHA-256
+        shell: pwsh
+        run: |
+          $zip = 'dist/ConcurrentSimulator-Windows-x64.zip'
+          $hash = (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+          Set-Content -LiteralPath 'dist/SHA256SUMS.txt' -Value "$hash  ConcurrentSimulator-Windows-x64.zip" -Encoding ASCII
+
+      - name: Guardar artefacto validado
+        uses: actions/upload-artifact@v4
+        with:
+          name: ConcurrentSimulator-Windows-x64
+          path: |
+            dist/ConcurrentSimulator-Windows-x64.zip
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Verificar que el tag pertenece a master
+        id: release_gate
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          git fetch origin master
+          git merge-base --is-ancestor $env:GITHUB_SHA origin/master
+          if ($LASTEXITCODE -ne 0) { throw 'El tag no apunta a un commit integrado en master; no se publicará Release.' }
+          if (-not (Test-Path -LiteralPath 'LICENSE')) { throw 'No se publicará la Release: el repositorio aún no define LICENSE para el código propio.' }
+          if (-not (Test-Path -LiteralPath 'dist/ConcurrentSimulator-Windows-x64/licencias/Qt-SBOM')) { throw 'No se publicará la Release: el paquete no contiene el SBOM de los módulos Qt.' }
+          "publicar=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publicar ZIP en GitHub Releases
+        if: steps.release_gate.outputs.publicar == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/ConcurrentSimulator-Windows-x64.zip
+            dist/SHA256SUMS.txt
+          generate_release_notes: true
