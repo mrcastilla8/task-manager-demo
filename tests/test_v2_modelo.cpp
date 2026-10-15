@@ -2,19 +2,13 @@
 #include "tests/TestSupport.h"
 
 #include <cstdint>
+#include <limits>
 
 using namespace ConcurrentSimulator::v2;
 
 namespace {
 
 AltaProceso altaValida() { return {1, "proceso", 32, 100, {}}; }
-
-Proceso proceso(int pid, std::int64_t tamanio, Estado estado = Estado::READY) {
-    AltaProceso alta{pid, "p" + std::to_string(pid), tamanio, 100, {}};
-    Proceso result = construirProcesoInicial(alta);
-    result.estado = estado;
-    return result;
-}
 
 }  // namespace
 

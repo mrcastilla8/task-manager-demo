@@ -61,6 +61,13 @@ public:
     }
 };
 QPushButton* button(gui::MainWindow& window, const char* name) { return window.findChild<QPushButton*>(name); }
+template <typename T>
+T* findWidget(QObject& root) {
+    for (QWidget* candidate : root.findChildren<QWidget*>()) {
+        if (auto* match = dynamic_cast<T*>(candidate)) return match;
+    }
+    return nullptr;
+}
 bool pumpUntil(const std::function<bool()>& condition) {
     QElapsedTimer elapsed;
     elapsed.start();
@@ -73,8 +80,11 @@ bool pumpUntil(const std::function<bool()>& condition) {
 }
 void refreshAndWait(gui::MainWindow& window, RecordingEngine& recording) {
     const int previous = recording.reads;
+    auto* timer = window.findChild<QTimer*>("snapshotRefresh");
     button(window, "retrySnapshot")->click();
-    EXPECT_TRUE(pumpUntil([&] { return recording.reads > previous; }));
+    EXPECT_TRUE(pumpUntil([&] {
+        return recording.reads > previous && timer->isActive();
+    }));
 }
 void checkPreview() {
     gui::MainWindow window; // Sin mostrar ventana ni generar capturas.
@@ -142,7 +152,7 @@ void checkFactories() {
 }
 void addThroughDialog(gui::MainWindow& window, int pid) {
     QTimer::singleShot(0, [&window, pid] {
-        auto* dialog = qobject_cast<gui::NewProcessDialog*>(
+        auto* dialog = dynamic_cast<gui::NewProcessDialog*>(
             QApplication::activeModalWidget());
         EXPECT_TRUE(dialog != nullptr);
         if (!dialog) return;
@@ -160,8 +170,8 @@ void checkGuiRealEngines() {
         auto* sources = window.findChild<QComboBox*>("engineSource");
         auto* table = dynamic_cast<gui::ProcessTable*>(
             window.findChild<QTableView*>("processTable"));
-        auto* timeline = window.findChild<gui::TimelineWidget*>();
-        auto* memory = window.findChild<gui::MemoryWidget*>();
+        auto* timeline = findWidget<gui::TimelineWidget>(window);
+        auto* memory = findWidget<gui::MemoryWidget>(window);
         auto* events = dynamic_cast<gui::EventLogWidget*>(
             window.findChild<QTableView*>("eventLog"));
         auto* clock = window.findChild<QLabel*>("simulationClock");
@@ -302,9 +312,12 @@ void checkSession(bool failInitially) {
     EXPECT_EQ(timer->interval(), 150);
     EXPECT_TRUE(step->isEnabled());
     step->click();
-    EXPECT_TRUE(pumpUntil([&] { return recording->steps == 1; }));
+    auto* reset = button(window, "reset");
+    EXPECT_TRUE(pumpUntil([&] {
+        return recording->steps == 1 && reset->isEnabled();
+    }));
     EXPECT_EQ(recording->steps, 1);
-    button(window, "reset")->click();
+    reset->click();
     EXPECT_TRUE(pumpUntil([&] { return recording->resets == 1; }));
     EXPECT_EQ(recording->resets, 1);
     EXPECT_FALSE(button(window, "start")->isEnabled());
