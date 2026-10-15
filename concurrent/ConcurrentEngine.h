@@ -17,6 +17,7 @@
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 class ConcurrentEngine : public IExecutionEngine {
@@ -66,6 +67,7 @@ private:
     void ejecutarPasoInterno(std::unique_lock<std::mutex>& lock);
     void registrarEventoInterno(TipoEvento tipo, int pid, std::string descripcion);
     void detenerTodosLosWorkersInterno();
+    void cancelarProcesoInterno(Proceso& proceso);
 
     // Los siguientes metodos exigen mutexEstado_ tomado por el llamador.
     bool todosTerminadosInterno() const;
@@ -85,6 +87,9 @@ private:
 
     std::unordered_map<int, std::unique_ptr<ProcessThread>> workers_;
     std::unordered_map<int, InfoIO> trackingIO_;
+    // Cancelaciones solicitadas sobre un proceso en RUN: se resuelven al cerrar
+    // la rafaga, tras contabilizar el CPU completado.
+    std::unordered_set<int> cancelacionesPendientes_;
     // Ticket estrictamente creciente asignado en cada ingreso a READY (alta,
     // retorno de WAIT y fin de cuota). Se almacena en Proceso::ordenLlegada.
     std::int64_t siguienteTicket_{1};

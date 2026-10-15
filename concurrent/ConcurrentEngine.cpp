@@ -73,21 +73,15 @@ void ConcurrentEngine::cancelarProceso(int pid) {
         return;
     }
 
-    proc->estado = Estado::CANCEL;
-    memoria_.liberar(pid);
-
-    auto workerIt = workers_.find(pid);
-    if (workerIt != workers_.end()) {
-        workerIt->second->solicitarDetencion();
+    // Un proceso solo esta en RUN mientras su rafaga esta en curso. La
+    // cancelacion no descarta esa rafaga: se resuelve al cerrarla, despues de
+    // contabilizar el CPU realmente completado.
+    if (proc->estado == Estado::RUN) {
+        cancelacionesPendientes_.insert(pid);
+        return;
     }
 
-    if (pidEjecutando_ == pid) {
-        pidEjecutando_ = -1;
-    }
-
-    registrarEventoInterno(TipoEvento::PROCESS_CANCELLED, pid,
-                           "Proceso cancelado por accion del usuario");
-
+    cancelarProcesoInterno(*proc);
     actualizarColaPrioridadInterno();
 
     if (todosTerminadosInterno()) {
@@ -138,6 +132,7 @@ void ConcurrentEngine::reiniciar() {
         memoria_ = Memoria(capacidad);
         colaProcesos_ = ColaProcesos{};
         trackingIO_.clear();
+        cancelacionesPendientes_.clear();
         siguienteTicket_ = 1;
 
         tiempoSimulado_ = 0;
@@ -433,11 +428,35 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
                                "Proceso cancelado durante la ejecucion");
     }
 
+    // Cancelacion solicitada durante la rafaga: se aplica sobre el estado ya
+    // resuelto. Si el proceso termino (FINISH) en este mismo limite, FINISH gana.
+    if (cancelacionesPendientes_.erase(siguientePid) > 0 &&
+        proc->estado != Estado::FINISH && proc->estado != Estado::CANCEL) {
+        cancelarProcesoInterno(*proc);
+    }
+
     actualizarColaPrioridadInterno();
 
     if (todosTerminadosInterno()) {
         estadoEjecucion_ = EstadoEjecucion::FINALIZADO;
     }
+}
+
+void ConcurrentEngine::cancelarProcesoInterno(Proceso& proceso) {
+    proceso.estado = Estado::CANCEL;
+    memoria_.liberar(proceso.pid);
+
+    const auto workerIt = workers_.find(proceso.pid);
+    if (workerIt != workers_.end()) {
+        workerIt->second->solicitarDetencion();
+    }
+
+    if (pidEjecutando_ == proceso.pid) {
+        pidEjecutando_ = -1;
+    }
+
+    registrarEventoInterno(TipoEvento::PROCESS_CANCELLED, proceso.pid,
+                           "Proceso cancelado por accion del usuario");
 }
 
 bool ConcurrentEngine::todosTerminadosInterno() const {
