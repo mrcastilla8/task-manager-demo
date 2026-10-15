@@ -3,6 +3,7 @@
 #include "tests/TestSupport.h"
 
 #include <utility>
+#include <type_traits>
 
 using namespace ConcurrentSimulator::v2;
 
@@ -17,6 +18,8 @@ Proceso proceso(int pid, Estado estado = Estado::READY) {
 
 int main() {
     ListaProcesos lista;
+    static_assert(std::is_same<decltype(lista.buscar(1)), const Proceso*>::value,
+                  "buscar solo debe exponer una vista const");
     EXPECT_TRUE(lista.vacia());
     EXPECT_EQ(lista.cantidad(), 0U);
     EXPECT_TRUE(lista.buscar(1) == nullptr);
@@ -26,6 +29,12 @@ int main() {
     EXPECT_TRUE(lista.agregar(proceso(2, Estado::WAIT)));
     EXPECT_TRUE(lista.agregar(proceso(3)));
     EXPECT_FALSE(lista.agregar(proceso(2)));
+    Proceso invalido = proceso(4);
+    invalido.tiempoCpuRestanteMs = 99;
+    EXPECT_FALSE(lista.agregar(invalido));
+    invalido = proceso(4);
+    invalido.pid = 0;
+    EXPECT_FALSE(lista.agregar(invalido));
     EXPECT_EQ(lista.cantidad(), 3U);
     EXPECT_EQ(lista.buscar(2)->estado, Estado::WAIT);
     EXPECT_TRUE(lista.buscar(99) == nullptr);
@@ -35,6 +44,24 @@ int main() {
     EXPECT_EQ(todos[1].pid, 2);
     EXPECT_EQ(todos[2].pid, 3);
     EXPECT_EQ(lista.obtenerPorEstado(Estado::READY).size(), 2U);
+
+    EXPECT_TRUE(lista.actualizarEstado(2, Estado::RUN));
+    EXPECT_TRUE(lista.actualizarPrioridad(2, Prioridad::P1));
+    EXPECT_TRUE(lista.actualizarCpu(2, 20, 80));
+    EXPECT_TRUE(lista.actualizarTiempoEspera(2, 7));
+    EXPECT_TRUE(lista.actualizarTicketReady(2, 42));
+    EXPECT_FALSE(lista.actualizarCpu(2, 101, 0));
+    EXPECT_FALSE(lista.actualizarTiempoEspera(2, -1));
+    EXPECT_FALSE(lista.actualizarEstado(2, static_cast<Estado>(255)));
+    EXPECT_FALSE(lista.actualizarPrioridad(2, static_cast<Prioridad>(0)));
+    EXPECT_EQ(lista.buscar(2)->pid, 2);
+    EXPECT_EQ(lista.buscar(2)->estado, Estado::RUN);
+    EXPECT_EQ(lista.buscar(2)->prioridad, Prioridad::P1);
+    EXPECT_EQ(lista.buscar(2)->tiempoCpuConsumidoMs, 20);
+    EXPECT_EQ(lista.buscar(2)->tiempoCpuRestanteMs, 80);
+    EXPECT_EQ(lista.buscar(2)->tiempoEsperaMs, 7);
+    EXPECT_EQ(lista.buscar(2)->ticketReady, 42U);
+    EXPECT_EQ(lista.buscar(2)->tiempoCpuConsumidoMs, 20);
 
     EXPECT_TRUE(lista.eliminar(2));  // medio
     EXPECT_TRUE(lista.eliminar(1));  // primero
@@ -49,8 +76,10 @@ int main() {
     EXPECT_TRUE(lista.agregar(proceso(11)));
     ListaProcesos copia(lista);
     EXPECT_EQ(copia.cantidad(), 2U);
-    copia.buscar(10)->nombre = "copia";
+    EXPECT_TRUE(copia.actualizarEstado(10, Estado::WAIT));
     EXPECT_EQ(lista.buscar(10)->nombre, "p10");
+    EXPECT_EQ(lista.buscar(10)->estado, Estado::READY);
+    EXPECT_EQ(copia.buscar(10)->estado, Estado::WAIT);
     ListaProcesos asignada;
     asignada.agregar(proceso(99));
     asignada = lista;
@@ -72,6 +101,72 @@ int main() {
     EXPECT_TRUE(destino.eliminar(11));
     EXPECT_TRUE(destino.agregar(proceso(12)));
     EXPECT_EQ(destino.buscar(12)->pid, 12);
+
+    ListaProcesos paraClasificar;
+    Proceso p1 = proceso(101);
+    p1.tamanioBytes = 100;
+    p1.ticketReady = 10;
+    Proceso p2 = proceso(102, Estado::RUN);
+    p2.tamanioBytes = 200;
+    p2.ticketReady = 11;
+    Proceso terminal = proceso(103, Estado::FINISH);
+    terminal.tamanioBytes = 1;
+    terminal.prioridad = Prioridad::P2;
+    Proceso cancelado = proceso(104, Estado::CANCEL);
+    cancelado.tamanioBytes = 1000;
+    cancelado.prioridad = Prioridad::P1;
+    Proceso esperando = proceso(106, Estado::WAIT);
+    esperando.tamanioBytes = 150;
+    esperando.ticketReady = 12;
+    EXPECT_TRUE(paraClasificar.agregar(p1));
+    EXPECT_TRUE(paraClasificar.agregar(p2));
+    EXPECT_TRUE(paraClasificar.agregar(terminal));
+    EXPECT_TRUE(paraClasificar.agregar(cancelado));
+    EXPECT_TRUE(paraClasificar.agregar(esperando));
+    EXPECT_TRUE(paraClasificar.reclasificarPrioridades());
+    EXPECT_EQ(paraClasificar.buscar(101)->prioridad, Prioridad::P1);
+    EXPECT_EQ(paraClasificar.buscar(102)->prioridad, Prioridad::P3);
+    EXPECT_EQ(paraClasificar.buscar(103)->prioridad, Prioridad::P2);
+    EXPECT_EQ(paraClasificar.buscar(104)->prioridad, Prioridad::P1);
+    EXPECT_EQ(paraClasificar.buscar(106)->prioridad, Prioridad::P2);
+    EXPECT_EQ(paraClasificar.buscar(101)->estado, Estado::READY);
+    EXPECT_EQ(paraClasificar.buscar(102)->estado, Estado::RUN);
+    EXPECT_EQ(paraClasificar.buscar(101)->ticketReady, 10U);
+    EXPECT_EQ(paraClasificar.buscar(102)->ticketReady, 11U);
+    EXPECT_EQ(paraClasificar.buscar(106)->estado, Estado::WAIT);
+    EXPECT_EQ(paraClasificar.buscar(106)->ticketReady, 12U);
+    const auto persistidos = paraClasificar.obtenerTodos();
+    EXPECT_EQ(persistidos[0].pid, 101);
+    EXPECT_EQ(persistidos[1].pid, 102);
+    EXPECT_EQ(persistidos[0].prioridad, Prioridad::P1);
+    EXPECT_EQ(persistidos[1].prioridad, Prioridad::P3);
+
+    Proceso nuevo = proceso(105);
+    nuevo.tamanioBytes = 1000;
+    EXPECT_TRUE(paraClasificar.agregar(nuevo));
+    EXPECT_TRUE(paraClasificar.reclasificarPrioridades());
+    EXPECT_EQ(paraClasificar.buscar(101)->prioridad, Prioridad::P1);
+    EXPECT_EQ(paraClasificar.buscar(102)->prioridad, Prioridad::P1);
+    EXPECT_EQ(paraClasificar.buscar(106)->prioridad, Prioridad::P1);
+    EXPECT_EQ(paraClasificar.buscar(105)->prioridad, Prioridad::P3);
+
+    ListaProcesos repetida;
+    for (int pid = 1; pid <= 500; ++pid) {
+        EXPECT_TRUE(repetida.agregar(proceso(pid + 20000)));
+    }
+    for (int pid = 1; pid <= 500; ++pid) {
+        EXPECT_TRUE(repetida.eliminar(pid + 20000));
+        EXPECT_FALSE(repetida.eliminar(pid + 20000));
+    }
+    EXPECT_TRUE(repetida.vacia());
+
+    ListaProcesos grande;
+    constexpr int cantidadGrande = 5000;
+    for (int pid = 1; pid <= cantidadGrande; ++pid) {
+        EXPECT_TRUE(grande.agregar(proceso(pid + 1000)));
+    }
+    EXPECT_EQ(grande.cantidad(), static_cast<std::size_t>(cantidadGrande));
+    // La destrucción sale de scope y desengancha nodos iterativamente.
 
     return test::finish();
 }

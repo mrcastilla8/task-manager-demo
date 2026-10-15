@@ -104,6 +104,14 @@ int main() {
     EXPECT_EQ(estados[2].prioridad, Prioridad::P1);
     EXPECT_EQ(estados[5].prioridad, Prioridad::P3);
 
+    std::vector<Proceso> fallida{proceso(20, 10), proceso(21, 10)};
+    fallida[1].tamanioBytes = 0;
+    fallida[0].prioridad = Prioridad::P3;
+    fallida[1].prioridad = Prioridad::P1;
+    EXPECT_FALSE(clasificarPrioridades(fallida));
+    EXPECT_EQ(fallida[0].prioridad, Prioridad::P3);
+    EXPECT_EQ(fallida[1].prioridad, Prioridad::P1);
+
     EXPECT_EQ(clasificarTamano(5, 5, 5), Prioridad::P3);
     std::vector<Proceso> solo{proceso(7, 5)};
     EXPECT_TRUE(clasificarPrioridades(solo));
