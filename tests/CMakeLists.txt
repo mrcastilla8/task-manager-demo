@@ -99,3 +99,6 @@ target_link_libraries(test_concurrent_v2_comparacion PRIVATE simulator_concurren
 target_include_directories(test_concurrent_v2_comparacion PRIVATE ${PROJECT_SOURCE_DIR})
 configure_simulator_test(test_concurrent_v2_comparacion)
 add_test(NAME test_concurrent_v2_comparacion COMMAND test_concurrent_v2_comparacion)
+
+add_simulator_v2_concurrent_test(test_concurrent_v2_basico)
+add_simulator_v2_concurrent_test(test_concurrent_v2_cuotas)
