@@ -81,3 +81,21 @@ add_executable(test_gui_presentation ../gui/test_presentation.cpp
     ../gui/Presentation.cpp ../gui/PreviewFrames.cpp)
 target_include_directories(test_gui_presentation PRIVATE ${PROJECT_SOURCE_DIR})
 add_test(NAME test_gui_presentation COMMAND test_gui_presentation)
+
+# ---------------------------------------------------------------------------
+# Motor concurrente v2 (Integrante 4). Pruebas propias de concurrent/.
+# ---------------------------------------------------------------------------
+function(add_simulator_v2_concurrent_test test_name)
+    add_executable(${test_name} ${test_name}.cpp)
+    target_link_libraries(${test_name} PRIVATE simulator_concurrent_v2)
+    target_include_directories(${test_name} PRIVATE ${PROJECT_SOURCE_DIR})
+    configure_simulator_test(${test_name})
+    add_test(NAME ${test_name} COMMAND ${test_name})
+endfunction()
+
+# La comparacion con el motor logico es la unica que enlaza simulator_simulation.
+add_executable(test_concurrent_v2_comparacion test_concurrent_v2_comparacion.cpp)
+target_link_libraries(test_concurrent_v2_comparacion PRIVATE simulator_concurrent_v2 simulator_simulation)
+target_include_directories(test_concurrent_v2_comparacion PRIVATE ${PROJECT_SOURCE_DIR})
+configure_simulator_test(test_concurrent_v2_comparacion)
+add_test(NAME test_concurrent_v2_comparacion COMMAND test_concurrent_v2_comparacion)
