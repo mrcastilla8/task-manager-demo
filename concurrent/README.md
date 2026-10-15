@@ -69,30 +69,54 @@ Conforme a la especificación de diseño del proyecto, se detallan las garantía
 - `intervaloCoordinadorMs_` es `std::atomic<int>`: se configura desde cualquier hilo mientras el coordinador lo lee.
 - Al asignar CPU, el motor recalcula `colaPrioridad_` **antes** de liberar `mutexEstado_` para la ráfaga. Durante el turno, un lector ve `pidEjecutando` con el proceso en RUN y una cola que contiene solo procesos READY.
 - Cada snapshot de `obtenerEstado()` cumple: a lo sumo un proceso RUN y coincide con `pidEjecutando`; `memoriaUsada` es la suma de tamaños de procesos no terminados; el timeline está ordenado, sin solapes y no supera el reloj; los eventos no retroceden en el tiempo.
+- Una única unidad lógica a la vez: `siguientePaso()`, el coordinador (`iniciar()`) y `reiniciar()` se serializan con `pasoEnCurso_` y `reiniciando_`. El coordinador solo inicia un paso si no hay otro en curso; `siguientePaso()` espera a que cierre el paso en curso y vuelve a validar que el motor siga PAUSADO; `pausar()` no retorna hasta cerrar la ráfaga.
+- `reiniciar()` limpia todo el estado sin soltar el mutex, retira los workers a una variable local y hace el `join` fuera del mutex. Ningún paso puede usar un worker que se está retirando.
+- Los hilos (`ProcessThread::worker_` y `ConcurrentEngine::hiloCoordinador_`) son el **último miembro** de su clase: arrancan al construirse y leen los demás miembros.
+- Cancelar un proceso en RUN no descarta la ráfaga: queda como cancelación pendiente y se resuelve al cerrarla, tras contabilizar el CPU completado (bloque de timeline, reloj y tiempo restante). Si el proceso termina en ese mismo límite, FINISH gana.
+- Cada ingreso a READY (alta, retorno de WAIT, fin de cuota) recibe un ticket estrictamente creciente en `Proceso::ordenLlegada`. El Scheduler desempata por ese campo, lo que produce Round Robin entre prioridades iguales. Los procesos que despiertan en el mismo turno reingresan por instante de despertar, ticket de bloqueo y PID.
+- `configurarRetardoRafagaPruebasMs()` existe **solo para pruebas**: duerme de forma interrumpible dentro del worker para ensanchar la ventana de la ráfaga. Está desactivado por defecto y no altera el tiempo simulado.
 
 ---
 
 ## 4. Pruebas Automatizadas
 
-El módulo incluye las 5 suites de pruebas requeridas y una suite de escenarios integrados:
+El módulo incluye las 5 suites de pruebas requeridas y suites adicionales de escenarios, exclusión de pasos, Round Robin y cancelación en RUN:
 
 1. `test_concurrent_basic.cpp`: Validación de admisibilidad, errores, inicialización y ejecución paso a paso con workers reales.
 2. `test_concurrent_pause.cpp`: Idempotencia de `iniciar()` y `pausar()`, suspensión en condición variable y control de `siguientePaso()`.
-3. `test_concurrent_cancel.cpp`: Cancelación idempotente en estados `READY`, `WAIT` y `FINISH`, con liberación de memoria y worker. La cancelación durante `RUN` queda fuera hasta aprobar DP-06.
+3. `test_concurrent_cancel.cpp`: Cancelación idempotente en estados `READY`, `WAIT` y `FINISH`, con liberación de memoria y worker.
 4. `test_concurrent_thread_shutdown.cpp`: Destrucción segura RAII, detención de workers y reinicio conservando configuración.
 5. `test_concurrent_race_safety.cpp`: Prueba bajo estrés con múltiples hilos lectores llamando a `obtenerEstado()` concurrentemente mientras un hilo productor inserta procesos en tiempo real. Verifica en cada snapshot las invariantes de la sección 3.1.
 6. `test_concurrent_scenarios.cpp`: Ciclo de E/S `RUN→WAIT→READY→FINISH` con secuencia exacta de eventos y bloques de timeline, aging integrado (3→9 en 12,000 ms) y ejecución continua con `iniciar()` hasta `FINALIZADO`.
+7. `test_concurrent_step_exclusion.cpp`: Varios hilos llaman a `siguientePaso()`, `iniciar()`, `pausar()` y `reiniciar()` a la vez mientras un monitor valida que nunca haya dos procesos en RUN. Usa el retardo de pruebas para que la carrera sea reproducible.
+8. `test_concurrent_round_robin.cpp`: Alternancia entre prioridades iguales, ticket de alta asignado por el motor, reingreso por cuota y retorno de WAIT, y orden determinista de varios despertares en el mismo turno.
+9. `test_concurrent_cancel_run.cpp`: Cancelación con la ráfaga en curso: conserva el CPU completado, un único evento, FINISH gana en el mismo límite, cancelación que llega con la ráfaga terminando en WAIT, reinicio durante la ráfaga y cancelación en ejecución continua.
+
+Las pruebas de carrera se verifican también por mutación: sin la corrección correspondiente, `test_concurrent_step_exclusion`, `test_concurrent_round_robin` y `test_concurrent_cancel_run` fallan.
 
 ---
 
-## 5. Decisiones pendientes que afectan a este módulo
+## 5. Decisiones aprobadas y estado en este módulo
 
-Estas reglas **no están aprobadas** (ver [`docs/DECISIONES_PENDIENTES.md`](../docs/DECISIONES_PENDIENTES.md)); el motor conserva su comportamiento actual y no se modificó para anticiparlas.
+DP-01 a DP-11 constan como **aprobadas** en [`docs/DECISIONES_APROBADAS.md`](../docs/DECISIONES_APROBADAS.md). Los contratos `contracts/v2/` son candidatos y los detalles técnicos señalados como "no ratificados" en [`docs/PROPUESTAS_TECNICAS_V2.md`](../docs/PROPUESTAS_TECNICAS_V2.md) siguen pendientes (gate G1). El motor sigue sobre el contrato **v1.0**.
 
-| DP | Comportamiento actual del motor | Qué falta decidir |
+| DP | Estado en el motor | Pendiente |
 |---|---|---|
-| DP-05 | Al agotar quantum el proceso vuelve a READY **sin** actualizar `ordenLlegada`; con prioridades iguales el Scheduler vuelve a elegir al mismo proceso, por lo que el motor no alterna (Round Robin) por sí solo. | Si el empate es FIFO de llegada o Round Robin de turnos y qué evento actualiza el orden de reingreso (ticket del motor u otra estructura). |
-| DP-06 | Cancelar RUN marca CANCEL, libera memoria y detiene el worker; la ráfaga parcial no se registra en el timeline. | Matriz completa de transiciones y efecto de cancelar durante RUN. |
-| DP-07 | `siguientePaso()` ejecuta una ráfaga completa (hasta quantum, E/S o fin) o, sin procesos READY, avanza el reloj hasta el fin de la E/S más próxima. | Si un paso es una transición, un evento o una ráfaga. |
-| DP-08 | La ráfaga se calcula sin demora real, por lo que RUN es prácticamente instantáneo. La velocidad visual no pertenece al motor según `contracts/README.md`. | Cadencia de refresco de la GUI y cómo hacer visible RUN transitorio sin alterar el reloj simulado. |
-| DP-08 | El tiempo ocioso por E/S avanza el reloj pero no genera bloque de timeline. | Representación de CPU inactivo. |
+| DP-05 (tickets, Round Robin) | Implementado sobre v1: `ordenLlegada` actúa como ticket en alta, retorno de WAIT y fin de cuota. | Orden de varios despertares simultáneos (propuesta técnica 1, no ratificada); límite del contador de tickets (propuesta 11). |
+| DP-06 (cancelación) | READY y WAIT cancelan al instante; RUN se cancela al cerrar la ráfaga conservando el CPU completado. Memoria y evento se emiten una vez. | Protocolo técnico: granularidad de checkpoint (1 ms propuesto), precedencia FINISH/CANCEL/cuota agotada en el mismo límite y si `cancelarProceso` es bloqueante o no. Hoy no bloquea y FINISH gana. |
+| DP-07 (paso) | `siguientePaso()` ejecuta un turno completo (cuota, E/S o fin) o, sin READY y con WAIT, avanza el reloj hasta el próximo despertar sin despachar. | Driver de ejecución continua (G1). |
+| DP-08 (timeline) | El tiempo ocioso avanza el reloj sin crear bloque. | Replay de RUN transitorio y secuencia de eventos (propuesta técnica 4); corresponde a la GUI. |
+| DP-04, DP-10, DP-01 (cuotas 10/20/30 ms, sin aging, P1–P3) | **No migrado.** Sigue el quantum global configurable y el aging heredado de v1. | Migración a v2 (ver sección 6). |
+| DP-11 | Un CPU lógico con workers reales; mismo Scheduler compartido. | Equivalencia con el motor lógico cuando exista. |
+
+---
+
+## 6. Lista de verificación de la migración a v2
+
+Bloqueada hasta ratificar G1 (errores, driver continuo, checkpoints de cancelación, eventos) y contar en `master` con el Scheduler v2 de Brickzon.
+
+- Eliminar la copia de `scheduler/` en esta rama y usar el módulo compartido.
+- Adoptar `contracts/v2`: alta sin prioridad, `cuotaMs(prioridad)` fijada al despachar, sin `configurarQuantum` ni aging, `ticketReady`.
+- Sustituir `ordenLlegada` por `ticketReady`; los tickets de este motor ya siguen la misma regla.
+- Retirar el caso de aging de `test_concurrent_scenarios.cpp` y adaptar las suites a P1–P3 con cuotas 10/20/30.
+- Comparar con el motor lógico de Aldana sobre los casos de referencia.
