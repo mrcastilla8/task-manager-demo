@@ -3,6 +3,9 @@
 #include "tests/TestSupport.h"
 
 #include <algorithm>
+#include <atomic>
+#include <thread>
+#include <vector>
 
 using namespace ConcurrentSimulator::v2;
 
@@ -107,6 +110,34 @@ int main() {
     EXPECT_TRUE(concurrente.cancelarProceso(4));
     EXPECT_EQ(concurrente.cantidadWorkers(), 0U);
     EXPECT_TRUE(concurrente.reiniciar());
+
+    ConcurrentEngineV2 snapshotsConcurrentes(Configuracion{250});
+    for (int pid = 10; pid < 15; ++pid) {
+        EXPECT_TRUE(snapshotsConcurrentes.agregarProceso(
+            {pid, "snapshot", 20 + pid, 100, {}}));
+    }
+    EXPECT_TRUE(snapshotsConcurrentes.iniciar());
+    EXPECT_TRUE(snapshotsConcurrentes.pausar());
+    std::atomic<bool> snapshotsValidos{true};
+    std::vector<std::thread> lectores;
+    for (int lector = 0; lector < 4; ++lector) {
+        lectores.emplace_back([&snapshotsConcurrentes, &snapshotsValidos]() {
+            for (int indice = 0; indice < 100; ++indice) {
+                const EstadoSistema estado = snapshotsConcurrentes.obtenerEstado();
+                if (estado.memoriaUsadaBytes != 160 ||
+                    estado.memoriaTotalBytes != 250 ||
+                    estado.procesos.size() != 5 || estado.colaReady.size() != 5) {
+                    snapshotsValidos = false;
+                }
+            }
+        });
+    }
+    for (std::thread& lector : lectores) lector.join();
+    EXPECT_TRUE(snapshotsValidos.load());
+    EXPECT_TRUE(snapshotsConcurrentes.cancelarProceso(12));
+    EXPECT_EQ(snapshotsConcurrentes.obtenerEstado().memoriaUsadaBytes, 128);
+    EXPECT_TRUE(snapshotsConcurrentes.reiniciar());
+    EXPECT_EQ(snapshotsConcurrentes.cantidadWorkers(), 0U);
 
     return test::finish();
 }
