@@ -72,6 +72,10 @@ public:
     // a mitad del alta no deja memoria reservada, procesos ni workers a medias.
     void configurarFalloAltaPruebas(EtapaAlta etapa);
 
+    // Solo pruebas: fija el proximo ticket para probar el agotamiento del
+    // contador sin recorrer 2^63 ingresos a READY.
+    void fijarSiguienteTicketPruebas(std::int64_t valor);
+
 private:
     struct InfoIO {
         bool operacionRealizada{false};
@@ -88,6 +92,8 @@ private:
     Evento construirEvento(TipoEvento tipo, int pid, std::string descripcion) const;
     std::int64_t cuotaParaDespachoInterno(const Proceso& proceso) const noexcept;
     void inyectarFalloAlta(EtapaAlta etapa) const;
+    std::int64_t asignarTicketInterno();
+    void exigirTicketsDisponiblesInterno(std::int64_t cantidad) const;
 
     // Los siguientes metodos exigen mutexEstado_ tomado por el llamador.
     bool todosTerminadosInterno() const;

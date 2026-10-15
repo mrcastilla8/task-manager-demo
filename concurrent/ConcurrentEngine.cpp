@@ -1,6 +1,7 @@
 #include "concurrent/ConcurrentEngine.h"
 
 #include <algorithm>
+#include <limits>
 #include <stdexcept>
 
 ConcurrentEngine::ConcurrentEngine(int capacidadMemoriaBytes)
@@ -31,6 +32,7 @@ void ConcurrentEngine::agregarProceso(const Proceso& proceso) {
     if (colaProcesos_.buscar(proceso.pid) != nullptr) {
         throw std::invalid_argument("Ya existe un proceso con el mismo PID");
     }
+    exigirTicketsDisponiblesInterno(1);
 
     Proceso admitido = proceso;
     admitido.estado = Estado::READY;
@@ -87,7 +89,7 @@ void ConcurrentEngine::agregarProceso(const Proceso& proceso) {
     }
 
     // Confirmacion: a partir de aqui nada puede lanzar.
-    ++siguienteTicket_;
+    asignarTicketInterno();
     colaPrioridad_ = std::move(nuevaCola);
     for (auto& evento : nuevosEventos) {
         eventos_.push_back(std::move(evento));
@@ -240,6 +242,27 @@ EstadoSistema ConcurrentEngine::obtenerEstado() const {
     return snapshot;
 }
 
+void ConcurrentEngine::fijarSiguienteTicketPruebas(std::int64_t valor) {
+    std::lock_guard<std::mutex> lock(mutexEstado_);
+    siguienteTicket_ = valor;
+}
+
+std::int64_t ConcurrentEngine::asignarTicketInterno() {
+    // El valor maximo nunca se asigna: asi el contador no desborda (misma regla
+    // que AsignadorTickets de Brickzon).
+    if (siguienteTicket_ >= std::numeric_limits<std::int64_t>::max()) {
+        throw std::overflow_error("Contador de tickets READY agotado");
+    }
+    return siguienteTicket_++;
+}
+
+void ConcurrentEngine::exigirTicketsDisponiblesInterno(
+    std::int64_t cantidad) const {
+    if (siguienteTicket_ > std::numeric_limits<std::int64_t>::max() - cantidad) {
+        throw std::overflow_error("Contador de tickets READY agotado");
+    }
+}
+
 void ConcurrentEngine::configurarFalloAltaPruebas(EtapaAlta etapa) {
     std::lock_guard<std::mutex> lock(mutexEstado_);
     falloAltaPruebas_ = etapa;
@@ -299,7 +322,17 @@ void ConcurrentEngine::loopCoordinador() {
             break;
         }
 
-        ejecutarPasoInterno(lock);
+        try {
+            ejecutarPasoInterno(lock);
+        } catch (const std::exception&) {
+            // Por ejemplo, contador de tickets agotado: el paso no modifico nada.
+            // El motor se pausa en lugar de terminar el hilo coordinador; un
+            // siguientePaso() manual reproduce y notifica la excepcion.
+            if (!lock.owns_lock()) {
+                lock.lock();
+            }
+            estadoEjecucion_ = EstadoEjecucion::PAUSADO;
+        }
 
         const int esperaMs = intervaloCoordinadorMs_;
         if (esperaMs > 0 && estadoEjecucion_ == EstadoEjecucion::EJECUTANDO &&
@@ -338,6 +371,13 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         pidEjecutando_ = -1;
         return;
     }
+
+    // Un paso consume como maximo un ticket para el proceso en ejecucion (bloqueo
+    // o fin de cuota) y uno por cada proceso en WAIT que pueda despertar.
+    // Se comprueba antes de modificar nada para no dejar el paso a medias.
+    exigirTicketsDisponiblesInterno(
+        1 + static_cast<std::int64_t>(
+                colaProcesos_.obtenerPorEstado(Estado::WAIT).size()));
 
     const int siguientePid = planificador_.seleccionarSiguiente(todos);
 
@@ -457,14 +497,14 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         trackingIO_[siguientePid].tiempoEsperaRestanteMs =
             proc->operacionIO.duracionEsperaMs;
         proc->quantumConsumido = 0;
-        proc->ordenLlegada = siguienteTicket_++;  // ticket de bloqueo (desempate)
+        proc->ordenLlegada = asignarTicketInterno();  // ticket de bloqueo
         registrarEventoInterno(TipoEvento::PROCESS_WAITING, siguientePid,
                                "Proceso pasa a WAIT por inicio de E/S");
     } else if (resultado.motivo == MotivoFinTurno::QUANTUM_AGOTADO) {
         proc->estado = Estado::READY;
         pidEjecutando_ = -1;
         proc->quantumConsumido = 0;
-        proc->ordenLlegada = siguienteTicket_++;  // Round Robin: ticket nuevo
+        proc->ordenLlegada = asignarTicketInterno();  // Round Robin: ticket nuevo
         registrarEventoInterno(TipoEvento::QUANTUM_FINISHED, siguientePid,
                                "Proceso agoto su quantum asignado");
         registrarEventoInterno(TipoEvento::PROCESS_READY, siguientePid,
@@ -550,7 +590,7 @@ void ConcurrentEngine::avanzarEsperasIOInterno(std::int64_t delta) {
         Proceso* enEspera = colaProcesos_.buscar(pid);
         if (enEspera != nullptr) {
             enEspera->estado = Estado::READY;
-            enEspera->ordenLlegada = siguienteTicket_++;
+            enEspera->ordenLlegada = asignarTicketInterno();
             registrarEventoInterno(
                 TipoEvento::PROCESS_READY, pid,
                 "Fin de espera E/S, proceso retorna a READY");

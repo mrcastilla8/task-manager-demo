@@ -35,4 +35,5 @@ add_simulator_test(test_concurrent_round_robin)
 add_simulator_test(test_concurrent_cancel_run)
 add_simulator_test(test_concurrent_alta_rollback)
 add_simulator_test(test_concurrent_cuota)
+add_simulator_test(test_concurrent_tickets)
 
