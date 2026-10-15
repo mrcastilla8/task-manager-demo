@@ -44,8 +44,8 @@ inline std::vector<TipoEvento> tiposDe(const EstadoSistema& estado, int pid) {
     return tipos;
 }
 
-inline long contarEventos(const EstadoSistema& estado, TipoEvento tipo,
-                          int pid = -2) {
+inline std::ptrdiff_t contarEventos(const EstadoSistema& estado,
+                                   TipoEvento tipo, int pid = -2) {
     return std::count_if(estado.eventos.begin(), estado.eventos.end(),
                          [tipo, pid](const Evento& evento) {
                              return evento.tipo == tipo &&
