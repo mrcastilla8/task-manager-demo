@@ -1,10 +1,16 @@
 #include "gui/MemoryWidget.h"
 #include "gui/WidgetSupport.h"
+#include "gui/SnapshotComparison.h"
 #include <QPainter>
+#include <QStringList>
 namespace gui {
 MemoryWidget::MemoryWidget(QWidget* parent) : QWidget(parent) { setMinimumHeight(145); }
 void MemoryWidget::present(const api::EstadoSistema& state) {
-    state_ = state;
+    if (state_.memoriaTotalBytes == state.memoriaTotalBytes && state_.memoriaUsadaBytes == state.memoriaUsadaBytes &&
+        same(state_.procesos, state.procesos)) return;
+    state_.memoriaTotalBytes = state.memoriaTotalBytes;
+    state_.memoriaUsadaBytes = state.memoriaUsadaBytes;
+    state_.procesos = state.procesos; // RAM no necesita copiar eventos ni timeline.
     QStringList occupants;
     for (const auto& p : state.procesos)
         if (active(p.estado)) occupants << QString("PID %1: %2 bytes").arg(p.pid).arg(number(p.tamanioBytes));

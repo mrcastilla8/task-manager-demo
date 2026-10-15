@@ -1,25 +1,26 @@
 #include "gui/EventLogWidget.h"
-#include "gui/WidgetSupport.h"
+#include <QHeaderView>
 #include <QScrollBar>
 namespace gui {
-EventLogWidget::EventLogWidget(QWidget* parent) : QTableWidget(parent) {
+EventLogWidget::EventLogWidget(QWidget* parent) : QTableView(parent) {
     setObjectName("eventLog");
-    setupTable(this, {"Tiempo simulado (ms)", "Evento", "PID", "Duración (ms)", "Detalle"});
+    model_ = new SnapshotTableModel(SnapshotTableModel::Kind::Events, this);
+    setModel(model_);
+    setEditTriggers(QAbstractItemView::NoEditTriggers);
+    setSelectionBehavior(QAbstractItemView::SelectRows);
+    setSelectionMode(QAbstractItemView::SingleSelection);
+    verticalHeader()->hide();
+    horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    horizontalHeader()->setDefaultSectionSize(160);
+    setColumnWidth(1, 190);
+    setColumnWidth(4, 400);
 }
 void EventLogWidget::present(const api::EstadoSistema& s) {
-    const int oldPosition = verticalScrollBar()->value();
-    const bool atEnd = oldPosition == verticalScrollBar()->maximum();
-    setRowCount(static_cast<int>(s.eventos.size()));
-    int row = 0;
-    // Conserva orden recibido, sin inferir precedencia para timestamps iguales.
-    for (const auto& event : s.eventos) {
-        cell(this, row, 0, number(event.tiempoSimuladoMs));
-        cell(this, row, 1, eventName(event.tipo));
-        cell(this, row, 2, event.pid > 0 ? QString::number(event.pid) : "—");
-        cell(this, row, 3, number(event.duracionMs));
-        cell(this, row, 4, QString::fromStdString(event.detalle));
-        ++row;
-    }
-    if (atEnd) scrollToBottom(); else verticalScrollBar()->setValue(oldPosition);
+    const int vertical = verticalScrollBar()->value(), horizontal = horizontalScrollBar()->value();
+    const bool atEnd = vertical == verticalScrollBar()->maximum();
+    if (!model_->present(s)) return;
+    updateGeometries();
+    if (atEnd) scrollToBottom(); else verticalScrollBar()->setValue(vertical);
+    horizontalScrollBar()->setValue(horizontal);
 }
 }

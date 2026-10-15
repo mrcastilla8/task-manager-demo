@@ -1,5 +1,6 @@
 #include "gui/Presentation.h"
 #include "gui/PreviewFrames.h"
+#include "gui/SnapshotComparison.h"
 #include "tests/TestSupport.h"
 #include <limits>
 
@@ -40,10 +41,15 @@ int main() {
     input.nombre = "  \t";
     EXPECT_FALSE(validateInput(input).empty());
 
-    const auto frames = previewFrames();
-    EXPECT_TRUE(frames.size() >= 7);
+    const auto scenarios = previewScenarios();
+    EXPECT_EQ(scenarios.size(), 3U);
+    EXPECT_EQ(scenarios.front().frames.size(), 7U);
     bool run = false, wait = false, finish = false, cancel = false;
-    for (const auto& frame : frames) {
+    for (const auto& scenario : scenarios) {
+      std::int64_t previousTime = 0;
+      for (const auto& frame : scenario.frames) {
+        EXPECT_TRUE(frame.state.tiempoSimuladoMs >= previousTime);
+        previousTime = frame.state.tiempoSimuladoMs;
         std::int64_t used = 0;
         int runners = 0;
         for (const auto& p : frame.state.procesos) {
@@ -62,7 +68,52 @@ int main() {
         }
         const auto rendered = timelineSpans(frame.state);
         if (!rendered.empty()) EXPECT_EQ(rendered.back().end, frame.state.tiempoSimuladoMs);
+      }
     }
     EXPECT_TRUE(run && wait && finish && cancel);
+
+    PreviewPlayback playback;
+    while (playback.next()) {}
+    EXPECT_EQ(playback.current().state.tiempoSimuladoMs, 30);
+    EXPECT_EQ(playback.scenarioIndex(), 0U);
+    EXPECT_FALSE(playback.next());
+    EXPECT_EQ(playback.frameIndex(), 6U);
+    playback.select(2);
+    EXPECT_EQ(playback.frameIndex(), 0U);
+    EXPECT_EQ(playback.current().state.tiempoSimuladoMs, 27);
+    EXPECT_FALSE(playback.next());
+    EXPECT_FALSE(playback.previous());
+    playback.select(0);
+    EXPECT_EQ(playback.current().state.tiempoSimuladoMs, 0);
+    playback.next();
+    playback.reset();
+    EXPECT_EQ(playback.frameIndex(), 0U);
+    EXPECT_THROW(playback.select(99), std::out_of_range);
+
+    SnapshotRetry retry;
+    EXPECT_EQ(retry.delayMs(), 150);
+    retry.failure();
+    EXPECT_FALSE(retry.healthy());
+    EXPECT_EQ(retry.delayMs(), 300);
+    for (int i = 0; i < 100; ++i) retry.failure();
+    EXPECT_EQ(retry.delayMs(), 5000);
+    retry.success();
+    EXPECT_TRUE(retry.healthy());
+    EXPECT_EQ(retry.delayMs(), 150);
+
+    auto original = scenarios.front().frames[3].state;
+    auto copy = original;
+    EXPECT_TRUE(sameSnapshot(original, copy));
+    copy.eventos.front().detalle += "corregido";
+    EXPECT_FALSE(sameSnapshot(original, copy));
+    copy = original;
+    copy.procesos.front().operacionIO.duracionEsperaMs += 1;
+    EXPECT_FALSE(sameSnapshot(original, copy));
+    copy = original;
+    copy.timeline.back() = api::BloqueTimeline(1, 4, 6);
+    EXPECT_FALSE(sameSnapshot(original, copy));
+    copy = original;
+    copy.colaReady.clear();
+    EXPECT_FALSE(sameSnapshot(original, copy));
     return test::finish();
 }

@@ -1,7 +1,8 @@
 #include "gui/PreviewFrames.h"
+#include <stdexcept>
 namespace gui {
 namespace api = ConcurrentSimulator::v2;
-std::vector<PreviewFrame> previewFrames() {
+std::vector<PreviewScenario> previewScenarios() {
     api::EstadoSistema s;
     s.estadoEjecucion = api::EstadoEjecucion::PAUSADO;
     s.memoriaTotalBytes = 1024;
@@ -81,6 +82,7 @@ std::vector<PreviewFrame> previewFrames() {
     s.eventos.push_back({30, api::TipoEvento::RUN_A_FINISH, 1, 0, "Fin Editor"});
     s.eventos.push_back({30, api::TipoEvento::SISTEMA_FINALIZADO, -1, 0, "Fin de fixture, no ejecución real"});
     frames.push_back({"Sesión terminada: historial completo", s});
+    std::vector<PreviewScenario> scenarios{{"Sesión: READY, RUN, WAIT y terminales", std::move(frames)}};
 
     api::EstadoSistema rotation;
     rotation.memoriaTotalBytes = 1024;
@@ -100,13 +102,24 @@ std::vector<PreviewFrame> previewFrames() {
         {30, api::TipoEvento::CUOTA_AGOTADA, 11, 0, "CPU pendiente: 15 ms"},
         {30, api::TipoEvento::RUN_A_READY, 11, 0, "Reingreso con ticket 3; PID 12 delante"}
     };
-    frames.push_back({"Fixture independiente: cuota agotada y ticket nuevo", rotation});
+    scenarios.push_back({"Cuota agotada y ticket nuevo", {{"Rotación READY publicada", rotation}}});
 
     api::EstadoSistema gaps;
     gaps.memoriaTotalBytes = 1024;
     gaps.tiempoSimuladoMs = 27;
     gaps.timeline = {{1, 2, 8}, {2, 18, 22}};
-    frames.push_back({"Fixture independiente: idle antes, entre y después", gaps});
-    return frames;
+    scenarios.push_back({"Idle antes, entre y después", {{"Huecos del timeline", gaps}}});
+    return scenarios;
+}
+PreviewPlayback::PreviewPlayback() : scenarios_(previewScenarios()) {}
+const PreviewFrame& PreviewPlayback::current() const { return scenarios_[scenario_].frames[frame_]; }
+std::size_t PreviewPlayback::frameCount() const { return scenarios_[scenario_].frames.size(); }
+bool PreviewPlayback::atEnd() const { return frame_ + 1 == frameCount(); }
+bool PreviewPlayback::next() { if (atEnd()) return false; ++frame_; return true; }
+bool PreviewPlayback::previous() { if (frame_ == 0) return false; --frame_; return true; }
+void PreviewPlayback::select(std::size_t index) {
+    if (index >= scenarios_.size()) throw std::out_of_range("Escenario inexistente");
+    scenario_ = index;
+    reset();
 }
 }

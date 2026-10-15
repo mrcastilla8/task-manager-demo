@@ -1,92 +1,74 @@
 #include "gui/MainWindow.h"
-#include "gui/CPUWidget.h"
 #include "gui/NewProcessDialog.h"
 #include "gui/ProcessTable.h"
-#include "gui/QueueWidget.h"
-#include "gui/EventLogWidget.h"
-#include "gui/TimelineWidget.h"
 #include "gui/PreviewFrames.h"
+#include "gui/TimelineWidget.h"
 #include "tests/TestSupport.h"
 #include <QApplication>
 #include <QCheckBox>
-#include <QGraphicsScene>
-#include <QFontDatabase>
-#include <QFileInfo>
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QTest>
 #include <QThread>
 #include <QTimer>
 #include <stdexcept>
 
 namespace {
-// Doble de transporte únicamente para comprobar delegación, no simula scheduling.
+// Doble de transporte: no ejecuta procesos ni modifica el reloj.
 class RecordingEngine : public gui::EngineSession::Engine {
 public:
-    gui::api::EstadoSistema state = gui::previewFrames().front().state;
-    int reads = 0, steps = 0, adds = 0, resets = 0, cancelled = -1;
-    bool rejectSnapshot = false;
-    gui::api::CodigoResultado cancelResult = gui::api::CodigoResultado::PID_INEXISTENTE;
-    gui::api::Resultado agregarProceso(const gui::api::AltaProceso&) override {
-        ++adds; return {gui::api::CodigoResultado::MEMORIA_INSUFICIENTE, -1};
-    }
-    gui::api::Resultado cancelarProceso(int pid) override { cancelled = pid; return {cancelResult, pid}; }
-    gui::api::Resultado iniciar() override { throw std::logic_error("GUI no debe impulsar continuidad"); }
+    gui::api::EstadoSistema state = gui::previewScenarios().front().frames.front().state;
+    mutable int reads = 0;
+    int steps = 0, adds = 0, resets = 0, cancellations = 0;
+    bool fail = false;
+    gui::api::Resultado agregarProceso(const gui::api::AltaProceso&) override { ++adds; return {}; }
+    gui::api::Resultado cancelarProceso(int pid) override { ++cancellations; return {gui::api::CodigoResultado::OK, pid}; }
+    gui::api::Resultado iniciar() override { throw std::logic_error("No se permite continuidad"); }
     gui::api::Resultado pausar() override { return {}; }
     gui::api::Resultado reiniciar() override { ++resets; return {}; }
     gui::api::ResultadoPaso siguientePaso() override { ++steps; return {}; }
     gui::api::EstadoSistema obtenerEstado() const override {
         EXPECT_TRUE(QThread::currentThread() == qApp->thread());
-        ++const_cast<RecordingEngine*>(this)->reads;
-        if (rejectSnapshot) throw std::runtime_error("Fallo de snapshot controlado");
+        ++reads;
+        if (fail) throw std::runtime_error("Fallo de lectura controlado");
         return state;
     }
 };
-}
-int main(int argc, char** argv) {
-    QApplication app(argc, argv);
-#ifdef Q_OS_WIN
-    // Offscreen en Windows no siempre descubre las fuentes del sistema.
-    const int fontId = QFontDatabase::addApplicationFont(qEnvironmentVariable("WINDIR") + "/Fonts/segoeui.ttf");
-    if (fontId >= 0) app.setFont(QFont(QFontDatabase::applicationFontFamilies(fontId).first(), 9));
-#endif
-    gui::MainWindow window;
-    window.show();
-    QTest::qWait(20);
-    auto* table = window.findChild<QTableWidget*>("processTable");
-    auto* queue = window.findChild<QListWidget*>("readyQueue");
+QPushButton* button(gui::MainWindow& window, const char* name) { return window.findChild<QPushButton*>(name); }
+void checkPreview() {
+    gui::MainWindow window; // Sin mostrar ventana ni generar capturas.
+    auto* next = button(window, "step");
+    auto* start = button(window, "start");
+    auto* scenarios = window.findChild<QComboBox*>("previewScenario");
     auto* clock = window.findChild<QLabel*>("simulationClock");
-    auto* next = window.findChild<QPushButton*>("step");
-    EXPECT_TRUE(table && queue && clock && next);
-    EXPECT_EQ(table->rowCount(), 3);
-    EXPECT_TRUE(queue->item(0)->text().contains("PID 2"));
-    const QString initialClock = clock->text();
-    QTest::qWait(200);
-    EXPECT_EQ(clock->text(), initialClock);
-    QTest::mouseClick(next, Qt::LeftButton);
+    auto* table = dynamic_cast<gui::ProcessTable*>(window.findChild<QTableView*>("processTable"));
+    EXPECT_EQ(scenarios->count(), 3);
+    for (int i = 0; i < 6; ++i) next->click();
+    EXPECT_TRUE(clock->text().contains("30 ms"));
+    EXPECT_FALSE(next->isEnabled());
+    EXPECT_FALSE(start->isEnabled());
+    next->click();
+    EXPECT_EQ(scenarios->currentIndex(), 0);
+    EXPECT_TRUE(clock->text().contains("30 ms"));
+    scenarios->setCurrentIndex(2);
+    EXPECT_TRUE(clock->text().contains("27 ms"));
+    EXPECT_FALSE(next->isEnabled());
+    EXPECT_EQ(table->presentationModel()->rowCount(), 0);
+    scenarios->setCurrentIndex(0);
+    EXPECT_TRUE(clock->text().contains("0 ms"));
+    EXPECT_EQ(table->presentationModel()->rowCount(), 3);
+    next->click();
     EXPECT_TRUE(window.findChild<QLabel*>("cpuDescription")->text().contains("PID 2"));
-    EXPECT_EQ(clock->text(), initialClock); // RUN publicado en el mismo t=0.
-    QTest::mouseClick(next, Qt::LeftButton);
-    EXPECT_TRUE(clock->text().contains("4 ms"));
-    auto* zoom = dynamic_cast<gui::TimelineWidget*>(window.findChild<QGraphicsView*>("timeline"));
-    zoom->setZoom(70);
-    EXPECT_TRUE(clock->text().contains("4 ms"));
-    auto* log = window.findChild<QTableWidget*>("eventLog");
-    EXPECT_EQ(log->rowCount(), 5);
-
-    auto reclassifiedRun = gui::previewFrames()[1].state;
-    reclassifiedRun.procesos[1].prioridad = gui::api::Prioridad::P1;
-    gui::CPUWidget cpuView;
-    cpuView.present(reclassifiedRun);
-    EXPECT_TRUE(cpuView.findChild<QLabel*>("cpuDescription")->text().contains("cuota fijada: 30 ms"));
-    gui::ProcessTable processView;
-    processView.present(reclassifiedRun);
-    EXPECT_EQ(processView.item(1, 5)->text(), QString("10"));
-
+    EXPECT_TRUE(clock->text().contains("0 ms"));
+    button(window, "reset")->click();
+    EXPECT_EQ(scenarios->currentIndex(), 0);
+    EXPECT_TRUE(clock->text().contains("0 ms"));
+}
+void checkForm() {
     gui::NewProcessDialog dialog;
     dialog.accept();
-    EXPECT_TRUE(!dialog.findChild<QLabel*>("inputError")->text().isEmpty());
+    EXPECT_EQ(dialog.result(), 0);
     dialog.findChild<QLineEdit*>("inputName")->setText("Editor");
     dialog.findChild<QLineEdit*>("inputBytes")->setText("9223372036854775808");
     dialog.accept();
@@ -99,54 +81,105 @@ int main(int argc, char** argv) {
     dialog.findChild<QLineEdit*>("inputIoAfter")->setText("8");
     dialog.accept();
     EXPECT_EQ(dialog.result(), static_cast<int>(QDialog::Accepted));
-
+}
+void checkSession(bool failInitially) {
+    gui::MainWindow window;
     auto engine = std::make_unique<RecordingEngine>();
     auto* recording = engine.get();
-    window.attachEngine(std::move(engine), "Doble de prueba · sin ejecución real");
-    const int reads = recording->reads;
-    QTest::qWait(350);
-    EXPECT_TRUE(recording->reads > reads);
-    EXPECT_EQ(recording->steps, 0);
-    EXPECT_EQ(recording->state.tiempoSimuladoMs, 0);
-    EXPECT_FALSE(window.findChild<QPushButton*>("start")->isEnabled());
-    QTest::mouseClick(next, Qt::LeftButton);
-    EXPECT_EQ(recording->steps, 1);
-    QTimer::singleShot(0, &window, [&window] {
-        auto* modal = dynamic_cast<gui::NewProcessDialog*>(window.findChild<QDialog*>());
-        EXPECT_TRUE(modal != nullptr);
-        if (modal) {
-            modal->findChild<QLineEdit*>("inputName")->setText("Alta de prueba");
-            modal->accept();
-        }
-    });
-    QTest::mouseClick(window.findChild<QPushButton*>("addProcess"), Qt::LeftButton);
-    EXPECT_EQ(recording->adds, 1);
-    EXPECT_EQ(recording->state.procesos.size(), 3U);
-    EXPECT_TRUE(window.findChild<QLabel*>("actionStatus")->text().contains("Memoria insuficiente"));
-    table->selectRow(0);
-    QTest::mouseClick(window.findChild<QPushButton*>("cancelProcess"), Qt::LeftButton);
-    EXPECT_EQ(recording->cancelled, 1);
-    EXPECT_TRUE(window.findChild<QLabel*>("actionStatus")->text().contains("no existe"));
-    recording->cancelResult = gui::api::CodigoResultado::PID_FINALIZADO;
-    QTest::mouseClick(window.findChild<QPushButton*>("cancelProcess"), Qt::LeftButton);
-    EXPECT_TRUE(window.findChild<QLabel*>("actionStatus")->text().contains("finalizó"));
-    QTest::mouseClick(window.findChild<QPushButton*>("reset"), Qt::LeftButton);
-    EXPECT_EQ(recording->resets, 1);
-    recording->rejectSnapshot = true;
-    QTest::qWait(200);
-    EXPECT_TRUE(window.findChild<QLabel*>("actionStatus")->text().contains("Fallo de snapshot"));
-
-    const QString screenshot = qEnvironmentVariable("SIMULATOR_GUI_SCREENSHOT");
-    if (!screenshot.isEmpty()) {
-        gui::MainWindow preview;
-        preview.show();
-        QTest::qWait(20);
-        EXPECT_TRUE(preview.grab().save(screenshot));
-        auto* advance = preview.findChild<QPushButton*>("step");
-        for (int i = 0; i < 3; ++i) QTest::mouseClick(advance, Qt::LeftButton);
-        EXPECT_TRUE(preview.grab().save(QFileInfo(screenshot).absolutePath() + "/preview-run.png"));
-        for (int i = 0; i < 2; ++i) QTest::mouseClick(advance, Qt::LeftButton);
-        EXPECT_TRUE(preview.grab().save(QFileInfo(screenshot).absolutePath() + "/preview-idle.png"));
+    recording->fail = failInitially;
+    window.attachEngine(std::move(engine), "Doble de transporte");
+    auto* retry = button(window, "retrySnapshot");
+    auto* timer = window.findChild<QTimer*>("snapshotRefresh");
+    auto* cancel = button(window, "cancelProcess");
+    auto* step = button(window, "step");
+    auto* table = dynamic_cast<gui::ProcessTable*>(window.findChild<QTableView*>("processTable"));
+    auto* clock = window.findChild<QLabel*>("simulationClock");
+    auto* status = window.findChild<QLabel*>("actionStatus");
+    EXPECT_TRUE(timer->isSingleShot());
+    EXPECT_TRUE(timer->isActive());
+    if (failInitially) {
+        EXPECT_FALSE(step->isEnabled());
+        EXPECT_EQ(timer->interval(), 300);
+        EXPECT_EQ(table->model()->rowCount(), 0);
+        EXPECT_TRUE(clock->text().contains("Sin snapshot"));
+        recording->fail = false;
+        retry->click();
     }
+    EXPECT_EQ(timer->interval(), 150);
+    EXPECT_TRUE(step->isEnabled());
+    EXPECT_FALSE(cancel->isEnabled());
+    cancel->click();
+    EXPECT_EQ(recording->cancellations, 0);
+    table->selectRow(0);
+    EXPECT_TRUE(cancel->isEnabled());
+    cancel->click();
+    EXPECT_EQ(recording->cancellations, 1);
+    table->clearSelection();
+    EXPECT_EQ(table->selectedPid(), -1); // currentIndex puede seguir apuntando a una fila.
+    EXPECT_FALSE(cancel->isEnabled());
+    table->selectRow(0);
+    recording->state.procesos[0].estado = gui::api::Estado::FINISH;
+    retry->click();
+    EXPECT_EQ(table->selectedPid(), 1);
+    EXPECT_FALSE(cancel->isEnabled());
+    cancel->click();
+    EXPECT_EQ(recording->cancellations, 1);
+    recording->state.procesos[0].estado = gui::api::Estado::CANCEL;
+    retry->click();
+    EXPECT_FALSE(cancel->isEnabled());
+    recording->state.procesos[0].estado = gui::api::Estado::WAIT;
+    retry->click();
+    EXPECT_TRUE(cancel->isEnabled());
+
+    const auto revision = table->presentationModel()->revision();
+    const auto time = recording->state.tiempoSimuladoMs;
+    for (int i = 0; i < 20; ++i) retry->click();
+    EXPECT_EQ(table->presentationModel()->revision(), revision);
+    EXPECT_EQ(recording->steps, 0);
+    EXPECT_EQ(recording->state.tiempoSimuladoMs, time);
+    const auto visibleClock = clock->text();
+    recording->fail = true;
+    retry->click();
+    EXPECT_TRUE(timer->isActive());
+    EXPECT_EQ(timer->interval(), 300);
+    EXPECT_FALSE(cancel->isEnabled());
+    EXPECT_FALSE(step->isEnabled());
+    EXPECT_FALSE(button(window, "reset")->isEnabled());
+    EXPECT_EQ(clock->text(), visibleClock);
+    EXPECT_TRUE(status->text().contains("Fallo de lectura"));
+    // Disparar la señal del timer prueba la ruta automática sin esperar wall-clock.
+    EXPECT_TRUE(QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection));
+    EXPECT_EQ(timer->interval(), 600);
+    recording->fail = false;
+    EXPECT_TRUE(QMetaObject::invokeMethod(timer, "timeout", Qt::DirectConnection));
+    EXPECT_EQ(timer->interval(), 150);
+    EXPECT_TRUE(step->isEnabled());
+    EXPECT_TRUE(cancel->isEnabled());
+    EXPECT_EQ(table->selectedPid(), 1);
+    EXPECT_TRUE(status->text().contains("recuperada"));
+    EXPECT_EQ(recording->state.tiempoSimuladoMs, time);
+    EXPECT_EQ(recording->steps, 0);
+    recording->state.timeline.emplace_back(1, 0, 1); // Bloque fuera del reloj publicado.
+    retry->click();
+    EXPECT_EQ(timer->interval(), 300);
+    EXPECT_FALSE(step->isEnabled());
+    EXPECT_EQ(clock->text(), visibleClock);
+    recording->state.timeline.clear();
+    retry->click();
+    EXPECT_EQ(timer->interval(), 150);
+    EXPECT_TRUE(step->isEnabled());
+    step->click();
+    EXPECT_EQ(recording->steps, 1);
+    button(window, "reset")->click();
+    EXPECT_EQ(recording->resets, 1);
+    EXPECT_FALSE(button(window, "start")->isEnabled());
+}
+}
+int main(int argc, char** argv) {
+    QApplication app(argc, argv);
+    checkPreview();
+    checkForm();
+    checkSession(false);
+    checkSession(true);
     return test::finish();
 }

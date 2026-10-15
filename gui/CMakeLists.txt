@@ -1,7 +1,7 @@
 find_package(Qt6 6.2 REQUIRED COMPONENTS Widgets)
 
 add_library(simulator_gui
-    Presentation.cpp PreviewFrames.cpp EngineSession.cpp
+    Presentation.cpp PreviewFrames.cpp EngineSession.cpp SnapshotTableModel.cpp
     MainWindow.cpp ProcessTable.cpp QueueWidget.cpp CPUWidget.cpp
     MemoryWidget.cpp TimelineWidget.cpp EventLogWidget.cpp NewProcessDialog.cpp
 )
@@ -28,4 +28,8 @@ if(BUILD_TESTING)
     target_link_libraries(test_gui PRIVATE simulator_gui Qt6::Test)
     add_test(NAME test_gui COMMAND test_gui)
     set_tests_properties(test_gui PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+    add_executable(test_gui_models test_gui_models.cpp)
+    target_link_libraries(test_gui_models PRIVATE simulator_gui Qt6::Test)
+    add_test(NAME test_gui_models COMMAND test_gui_models)
+    set_tests_properties(test_gui_models PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endif()

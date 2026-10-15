@@ -1,34 +1,43 @@
 #include "gui/ProcessTable.h"
-#include "gui/WidgetSupport.h"
+#include <QHeaderView>
+#include <QScrollBar>
+#include <QSignalBlocker>
 namespace gui {
-ProcessTable::ProcessTable(QWidget* parent) : QTableWidget(parent) {
+ProcessTable::ProcessTable(QWidget* parent) : QTableView(parent) {
     setObjectName("processTable");
-    setupTable(this, {"PID", "Nombre", "Bytes", "Estado", "Prioridad", "Cuota vigente (ms)",
-                     "CPU total (ms)", "Restante (ms)", "Consumida (ms)", "Espera (ms)", "Ticket READY"});
+    model_ = new SnapshotTableModel(SnapshotTableModel::Kind::Processes, this);
+    setModel(model_);
+    setEditTriggers(QAbstractItemView::NoEditTriggers);
+    setSelectionBehavior(QAbstractItemView::SelectRows);
+    setSelectionMode(QAbstractItemView::SingleSelection);
+    verticalHeader()->hide();
+    horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
+    horizontalHeader()->setDefaultSectionSize(115);
 }
 void ProcessTable::present(const api::EstadoSistema& state) {
     const int selected = selectedPid();
-    setRowCount(static_cast<int>(state.procesos.size()));
-    int row = 0;
-    for (const auto& p : state.procesos) {
-        cell(this, row, 0, QString::number(p.pid));
-        cell(this, row, 1, QString::fromStdString(p.nombre));
-        cell(this, row, 2, number(p.tamanioBytes));
-        cell(this, row, 3, stateName(p.estado));
-        cell(this, row, 4, priority(p.prioridad));
-        cell(this, row, 5, number(api::cuotaVigenteMs(p)));
-        cell(this, row, 6, number(p.tiempoCpuTotalMs));
-        cell(this, row, 7, number(p.tiempoCpuRestanteMs));
-        cell(this, row, 8, number(p.tiempoCpuConsumidoMs));
-        cell(this, row, 9, number(p.tiempoEsperaMs));
-        cell(this, row, 10, QString::number(static_cast<qulonglong>(p.ticketReady)));
-        item(row, 0)->setForeground(pidColor(p.pid).darker(180));
-        if (p.pid == selected) selectRow(row);
-        ++row;
+    const int vertical = verticalScrollBar()->value(), horizontal = horizontalScrollBar()->value();
+    const QSignalBlocker blocker(selectionModel());
+    if (!model_->present(state)) return;
+    clearSelection();
+    setCurrentIndex({});
+    if (selected > 0) {
+        for (int row = 0; row < model_->rowCount(); ++row) {
+            if (model_->process(row)->pid == selected) { selectRow(row); break; }
+        }
     }
+    updateGeometries();
+    verticalScrollBar()->setValue(vertical);
+    horizontalScrollBar()->setValue(horizontal);
 }
 int ProcessTable::selectedPid() const {
-    const auto* value = item(currentRow(), 0);
-    return value ? value->text().toInt() : -1;
+    const auto rows = selectionModel()->selectedRows();
+    const auto* p = rows.isEmpty() ? nullptr : model_->process(rows.front().row());
+    return p ? p->pid : -1;
+}
+bool ProcessTable::selectedIsActive() const {
+    const auto rows = selectionModel()->selectedRows();
+    const auto* p = rows.isEmpty() ? nullptr : model_->process(rows.front().row());
+    return p && p->pid > 0 && active(p->estado);
 }
 }
