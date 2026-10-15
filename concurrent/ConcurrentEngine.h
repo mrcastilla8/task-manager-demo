@@ -9,6 +9,7 @@
 #include "core/Memoria.h"
 #include "scheduler/Scheduler.h"
 
+#include <array>
 #include <atomic>
 #include <chrono>
 #include <condition_variable>
@@ -19,6 +20,17 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+
+// Solo pruebas: etapa del alta en la que se inyecta un fallo para verificar el
+// rollback. Ver ConcurrentEngine::configurarFalloAltaPruebas().
+enum class EtapaAlta {
+    NINGUNA,
+    CREAR_WORKER,
+    INSERTAR_COLA,
+    REGISTRAR_WORKER,
+    CALCULAR_COLA,
+    PREPARAR_EVENTOS
+};
 
 class ConcurrentEngine : public IExecutionEngine {
 public:
@@ -57,6 +69,11 @@ public:
     // No modifica el tiempo simulado ni la cuota.
     void configurarRetardoRafagaPruebasMs(int ms) noexcept;
 
+    // Solo pruebas: hace fallar el siguiente alta en la etapa indicada (lanza
+    // std::runtime_error). NINGUNA lo desactiva. Permite comprobar que un fallo
+    // a mitad del alta no deja memoria reservada, procesos ni workers a medias.
+    void configurarFalloAltaPruebas(EtapaAlta etapa);
+
 private:
     struct InfoIO {
         bool operacionRealizada{false};
@@ -67,7 +84,11 @@ private:
     void ejecutarPasoInterno(std::unique_lock<std::mutex>& lock);
     void registrarEventoInterno(TipoEvento tipo, int pid, std::string descripcion);
     void detenerTodosLosWorkersInterno();
-    void cancelarProcesoInterno(Proceso& proceso);
+    void cancelarProcesoInterno(
+        Proceso& proceso,
+        const char* descripcion = "Proceso cancelado por accion del usuario");
+    Evento construirEvento(TipoEvento tipo, int pid, std::string descripcion) const;
+    void inyectarFalloAlta(EtapaAlta etapa) const;
 
     // Los siguientes metodos exigen mutexEstado_ tomado por el llamador.
     bool todosTerminadosInterno() const;
@@ -93,6 +114,7 @@ private:
     // Ticket estrictamente creciente asignado en cada ingreso a READY (alta,
     // retorno de WAIT y fin de cuota). Se almacena en Proceso::ordenLlegada.
     std::int64_t siguienteTicket_{1};
+    EtapaAlta falloAltaPruebas_{EtapaAlta::NINGUNA};
 
     std::int64_t tiempoSimulado_{0};
     EstadoEjecucion estadoEjecucion_{EstadoEjecucion::DETENIDO};

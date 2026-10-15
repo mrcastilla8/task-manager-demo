@@ -34,30 +34,66 @@ void ConcurrentEngine::agregarProceso(const Proceso& proceso) {
         throw std::invalid_argument("Ya existe un proceso con el mismo PID");
     }
 
-    if (!memoria_.cargar(proceso)) {
-        throw std::runtime_error(
-            "Memoria insuficiente para admitir el nuevo proceso");
-    }
-
     Proceso admitido = proceso;
     admitido.estado = Estado::READY;
     admitido.tiempoRestante = admitido.tiempoTotal;
     admitido.tiempoEspera = 0;
     admitido.quantumConsumido = 0;
-    admitido.ordenLlegada = siguienteTicket_++;
+    admitido.ordenLlegada = siguienteTicket_;  // se consume al confirmar el alta
 
-    colaProcesos_.agregar(admitido);
-    workers_[admitido.pid] = std::make_unique<ProcessThread>(admitido.pid);
-    trackingIO_[admitido.pid] = InfoIO{};
+    // El alta es transaccional: todo lo que puede fallar (hilo, memoria,
+    // insercion, calculo de la cola y eventos) ocurre antes de confirmar y se
+    // deshace si algo lanza. Ningun error deja memoria reservada, procesos
+    // incompletos ni workers inconsistentes.
+    inyectarFalloAlta(EtapaAlta::CREAR_WORKER);
+    std::unique_ptr<ProcessThread> worker =
+        std::make_unique<ProcessThread>(admitido.pid);
 
-    registrarEventoInterno(TipoEvento::PROCESS_CREATED, admitido.pid,
-                           "Proceso registrado en el motor");
-    registrarEventoInterno(TipoEvento::PROCESS_ADMITTED, admitido.pid,
-                           "Proceso admitido en memoria simulada");
-    registrarEventoInterno(TipoEvento::PROCESS_READY, admitido.pid,
-                           "Proceso colocado en cola READY");
+    if (!memoria_.cargar(proceso)) {
+        throw std::runtime_error(
+            "Memoria insuficiente para admitir el nuevo proceso");
+    }
 
-    actualizarColaPrioridadInterno();
+    std::vector<int> nuevaCola;
+    std::array<Evento, 3> nuevosEventos;
+    try {
+        inyectarFalloAlta(EtapaAlta::INSERTAR_COLA);
+        colaProcesos_.agregar(admitido);
+        try {
+            inyectarFalloAlta(EtapaAlta::REGISTRAR_WORKER);
+            workers_[admitido.pid] = std::move(worker);
+            trackingIO_[admitido.pid] = InfoIO{};
+
+            inyectarFalloAlta(EtapaAlta::CALCULAR_COLA);
+            nuevaCola =
+                scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+
+            inyectarFalloAlta(EtapaAlta::PREPARAR_EVENTOS);
+            nuevosEventos = {
+                construirEvento(TipoEvento::PROCESS_CREATED, admitido.pid,
+                                "Proceso registrado en el motor"),
+                construirEvento(TipoEvento::PROCESS_ADMITTED, admitido.pid,
+                                "Proceso admitido en memoria simulada"),
+                construirEvento(TipoEvento::PROCESS_READY, admitido.pid,
+                                "Proceso colocado en cola READY")};
+            eventos_.reserve(eventos_.size() + nuevosEventos.size());
+        } catch (...) {
+            trackingIO_.erase(admitido.pid);
+            workers_.erase(admitido.pid);  // el destructor une el hilo
+            colaProcesos_.eliminar(admitido.pid);
+            throw;
+        }
+    } catch (...) {
+        memoria_.liberar(admitido.pid);
+        throw;
+    }
+
+    // Confirmacion: a partir de aqui nada puede lanzar.
+    ++siguienteTicket_;
+    colaPrioridad_ = std::move(nuevaCola);
+    for (auto& evento : nuevosEventos) {
+        eventos_.push_back(std::move(evento));
+    }
 
     if (estadoEjecucion_ == EstadoEjecucion::FINALIZADO) {
         estadoEjecucion_ = EstadoEjecucion::PAUSADO;
@@ -206,6 +242,17 @@ EstadoSistema ConcurrentEngine::obtenerEstado() const {
     return snapshot;
 }
 
+void ConcurrentEngine::configurarFalloAltaPruebas(EtapaAlta etapa) {
+    std::lock_guard<std::mutex> lock(mutexEstado_);
+    falloAltaPruebas_ = etapa;
+}
+
+void ConcurrentEngine::inyectarFalloAlta(EtapaAlta etapa) const {
+    if (falloAltaPruebas_ == etapa) {
+        throw std::runtime_error("Fallo inyectado en el alta (solo pruebas)");
+    }
+}
+
 void ConcurrentEngine::configurarRetardoRafagaPruebasMs(int ms) noexcept {
     retardoRafagaPruebasMs_ = std::max(0, ms);
 }
@@ -327,6 +374,20 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         return;
     }
 
+    // El worker se localiza antes de marcar RUN: un proceso nunca debe quedar en
+    // RUN sin hilo que ejecute su rafaga (bloquearia el CPU logico).
+    const auto workerIt = workers_.find(siguientePid);
+    if (workerIt == workers_.end() || workerIt->second == nullptr) {
+        cancelarProcesoInterno(
+            *proc, "Proceso sin worker asociado; cancelado para no bloquear la CPU");
+        actualizarColaPrioridadInterno();
+        if (todosTerminadosInterno()) {
+            estadoEjecucion_ = EstadoEjecucion::FINALIZADO;
+        }
+        return;
+    }
+    ProcessThread* worker = workerIt->second.get();
+
     if (proc->estado == Estado::READY) {
         proc->estado = Estado::RUN;
         pidEjecutando_ = siguientePid;
@@ -352,16 +413,6 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
             solicitud.cpuRestanteParaIO =
                 proc->operacionIO.despuesDeCpuMs - cpuEjecutada;
         }
-    }
-
-    ProcessThread* worker = nullptr;
-    auto workerIt = workers_.find(siguientePid);
-    if (workerIt != workers_.end()) {
-        worker = workerIt->second.get();
-    }
-
-    if (worker == nullptr) {
-        return;
     }
 
     worker->concederTurno(solicitud);
@@ -442,7 +493,8 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
     }
 }
 
-void ConcurrentEngine::cancelarProcesoInterno(Proceso& proceso) {
+void ConcurrentEngine::cancelarProcesoInterno(Proceso& proceso,
+                                              const char* descripcion) {
     proceso.estado = Estado::CANCEL;
     memoria_.liberar(proceso.pid);
 
@@ -456,7 +508,7 @@ void ConcurrentEngine::cancelarProcesoInterno(Proceso& proceso) {
     }
 
     registrarEventoInterno(TipoEvento::PROCESS_CANCELLED, proceso.pid,
-                           "Proceso cancelado por accion del usuario");
+                           descripcion);
 }
 
 bool ConcurrentEngine::todosTerminadosInterno() const {
@@ -532,14 +584,19 @@ void ConcurrentEngine::aplicarAgingAListosInterno(std::int64_t delta) {
     }
 }
 
-void ConcurrentEngine::registrarEventoInterno(TipoEvento tipo, int pid,
-                                             std::string descripcion) {
+Evento ConcurrentEngine::construirEvento(TipoEvento tipo, int pid,
+                                         std::string descripcion) const {
     Evento evento;
     evento.tiempoSimulado = tiempoSimulado_;
     evento.tipo = tipo;
     evento.pid = pid;
     evento.descripcion = std::move(descripcion);
-    eventos_.push_back(std::move(evento));
+    return evento;
+}
+
+void ConcurrentEngine::registrarEventoInterno(TipoEvento tipo, int pid,
+                                             std::string descripcion) {
+    eventos_.push_back(construirEvento(tipo, pid, std::move(descripcion)));
 }
 
 void ConcurrentEngine::detenerTodosLosWorkersInterno() {
