@@ -1,266 +1,40 @@
-# Integrante 1 — Modelo, Estructuras de Datos y Memoria
+# Integrante 1 — Modelo, estructuras de datos y memoria
 
-## Objetivo
+> **Instrucción operativa para migración v2:** Castilla mantiene el alcance de modelo, lista y memoria y migra solo después de ratificar/adoptar los contratos candidatos. v2 clasifica automáticamente P1–P3; la cuota vigente deriva de prioridad (10/20/30 ms), sin cuota mutable duplicada. No editar v1 durante la fase contractual. La descripción de la API v1 al final es histórica y no una lista de trabajo v2.
 
-Construir las estructuras fundamentales que representan los procesos y los recursos simulados del sistema.
+**Responsable:** Castilla · **Rama:** `castilla` · **Workflow:** [fase 1](docs/WORKFLOW_DESARROLLO.md#fase-1--modelo-estructuras-de-datos-y-memoria)
 
-Este integrante **no implementa el algoritmo de planificación**, **no crea threads** y **no desarrolla la GUI**.
+## Objetivo y entregables
 
----
+Modelar procesos activos e históricos, mantener cola/lista y capacidad de memoria. El módulo no implementa Scheduler, reloj, ejecución de cuota, workers, animaciones ni widgets.
 
-## Responsabilidades
+- `contracts/v2/Proceso.h` y los contratos asociados son candidatos; no migrar el código consumidor hasta ratificación.
+- `core/ColaProcesos.h/.cpp`, `core/Memoria.h/.cpp` son código v1 existente; mantenerlos y sus pruebas intactos durante preparación documental.
+- Pruebas base: `tests/test_proceso.cpp`, `tests/test_cola.cpp`, `tests/test_memoria.cpp` y `tests/test_integracion.cpp`.
 
-### 1. Modelo `Proceso`
+## Modelo destino v2
 
-Implementar la representación de un proceso con, como mínimo:
+`AltaProceso` no acepta prioridad, ticket ni cuota. La prioridad se deriva del tamaño relativo entre procesos activos READY/RUN/WAIT conforme al algoritmo documentado. FINISH/CANCEL salen del conjunto activo. Cuota vigente no es un campo mutable: `cuotaMs(P1)=10`, P2=20, P3=30 ms. El snapshot puede llevar separada la cuota fijada del turno RUN. Una reclasificación nunca deja estado público como prioridad P1 con cuota vigente de 30 ms.
 
-```cpp
-struct Proceso {
-    int pid;
-    std::string nombre;
-    int tamanioBytes;
+Validar PID positivo, nombre no vacío, tamaño positivo, CPU válida y E/S opcional consistente. La lista v2 propuesta es simple enlazada con nodos primero/último/siguiente según el acuerdo de estructura; gestionar ownership, copia/move, borrado y destrucción. Memoria usa tamaños y contadores compatibles con el rango v2, reserva al admitir y libera una sola vez en FINISH/CANCEL; WAIT conserva asignación. No modelar direcciones físicas, paginación ni memoria virtual.
 
-    int prioridadBase;
-    int prioridadActual;
+## Escenarios y pruebas
 
-    int tiempoTotal;
-    int tiempoRestante;
-    int tiempoEspera;
+- `test_proceso.cpp`: conservar cobertura existente v1; la futura suite v2 prueba construcción/validación con API ratificada.
+- `test_cola.cpp`: altas, búsqueda PID, borrado existente/ausente, orden y filtros; migrar aserciones al tipo de lista aprobado.
+- `test_memoria.cpp`: capacidad, carga, descarga, PID repetido, proceso inválido y rechazo sin mutación.
+- `test_integracion.cpp`: coherencia modelo/cola/memoria y admisión/rechazo.
 
-    int quantumConsumido;
+Escenarios numéricos conservados: capacidad 2,048 bytes con A=500/B=1,000 deja 1,500 usados y 548 disponibles; liberar A deja 1,000. Con capacidad 1,000, admitir A=600 y rechazar B=500 deja uso en 600. FIFO describe orden de almacenamiento; Scheduler determina READY aparte.
 
-    Estado estado;
+## Contexto histórico v1
 
-    long ordenLlegada;
-};
-```
+`contracts/*.h`/`core/` siguen vigentes para el código integrado: `std::list`, prioridad base/actual 1–10, quantum consumido, orden de llegada y validación/excepciones actuales. Sus firmas, ejemplos y pruebas existentes se conservan; no se modifican en esta fase. La documentación v1 no gobierna diseño ni tareas v2.
 
-Puede ampliarse si otros módulos necesitan información adicional, pero no debe introducir lógica propia del scheduler.
+## Criterios de aceptación futura
 
----
-
-## 2. Estados
-
-Definir:
-
-```cpp
-enum class Estado {
-    READY,
-    RUN,
-    WAIT,
-    FINISH,
-    CANCEL
-};
-```
-
-Debe existir una función auxiliar para convertir el estado a texto.
-
-Ejemplo:
-
-```cpp
-std::string estadoToString(Estado estado);
-```
-
----
-
-## 3. Estructura dinámica de procesos
-
-Implementar una estructura encargada de almacenar procesos.
-
-Funciones mínimas:
-
-```cpp
-class ColaProcesos {
-public:
-    void agregar(const Proceso& proceso);
-    bool eliminar(int pid);
-
-    Proceso* buscar(int pid);
-    const Proceso* buscar(int pid) const;
-
-    std::vector<Proceso> obtenerTodos() const;
-    std::vector<Proceso> obtenerPorEstado(Estado estado) const;
-
-    bool vacia() const;
-    size_t cantidad() const;
-};
-```
-
-La estructura no decide qué proceso tiene mayor prioridad. Esa responsabilidad corresponde al Scheduler.
-
----
-
-## 4. Memoria simulada
-
-Implementar un modelo simple de memoria.
-
-Ejemplo:
-
-```cpp
-class Memoria {
-private:
-    int capacidadTotal;
-    int memoriaUtilizada;
-
-public:
-    bool puedeCargar(const Proceso& proceso) const;
-    bool cargar(const Proceso& proceso);
-    void liberar(int pid);
-
-    int obtenerTotal() const;
-    int obtenerUtilizada() const;
-    int obtenerDisponible() const;
-};
-```
-
-No implementar:
-
-- paginación;
-- segmentación;
-- memoria virtual;
-- reemplazo de páginas.
-
-El objetivo es únicamente representar visualmente cuánto espacio ocupan los procesos.
-
----
-
-## 5. Eventos y estructuras comunes
-
-Colaborar en la definición de:
-
-```text
-contracts/
-    Proceso.h
-    Estado.h
-    Evento.h
-    EstadoSistema.h
-```
-
-Ejemplo de evento:
-
-```cpp
-enum class TipoEvento {
-    PROCESS_CREATED,
-    PROCESS_READY,
-    PROCESS_RUNNING,
-    QUANTUM_FINISHED,
-    PROCESS_WAITING,
-    PROCESS_FINISHED,
-    PROCESS_CANCELLED,
-    PRIORITY_CHANGED
-};
-```
-
----
-
-## Entregables
-
-```text
-contracts/
-    Proceso.h
-    Estado.h
-    Evento.h
-    EstadoSistema.h
-
-core/
-    ColaProcesos.h
-    ColaProcesos.cpp
-    Memoria.h
-    Memoria.cpp
-```
-
-Además:
-
-```text
-tests/
-    test_proceso.cpp
-    test_cola.cpp
-    test_memoria.cpp
-```
-
----
-
-## Pruebas mínimas
-
-### Agregar procesos
-
-```text
-Agregar A
-Agregar B
-Agregar C
-
-cantidad = 3
-```
-
-### Buscar proceso
-
-```text
-buscar(pid=2)
-→ B
-```
-
-### Eliminar proceso
-
-```text
-A → B → C
-
-eliminar(B)
-
-A → C
-```
-
-### Memoria
-
-```text
-Memoria total = 2048 MB
-
-A = 500 MB
-B = 1000 MB
-
-utilizada = 1500 MB
-disponible = 548 MB
-```
-
-Debe rechazarse un proceso que exceda la capacidad disponible.
-
----
-
-## No es responsabilidad de este integrante
-
-No implementar:
-
-- cálculo de prioridades;
-- aging;
-- Round Robin;
-- selección del siguiente proceso;
-- ejecución del quantum;
-- threads;
-- mutex;
-- condition variables;
-- animaciones;
-- widgets;
-- timeline gráfico.
-
----
-
-## Dependencias
-
-Puede trabajar desde el inicio.
-
-Los otros integrantes dependen del contrato de `Proceso`, `Estado` y `EstadoSistema`, por lo que estos archivos deben estabilizarse temprano.
-
-Una vez acordados los campos comunes, evitar cambios incompatibles.
-
----
-
-## Criterios de aceptación
-
-El módulo se considera terminado cuando:
-
-- pueden crearse procesos válidos;
-- pueden buscarse y eliminarse por PID;
-- pueden filtrarse por estado;
-- la estructura admite altas y bajas dinámicas;
-- la memoria simulada carga y libera procesos;
-- los tests pasan;
-- el módulo no contiene lógica gráfica, de scheduling ni concurrencia.
+- API ratificada consistente, cuota vigente derivada exclusivamente de prioridad y turno fijado separado.
+- Inserción, búsqueda, filtros y borrado correctos; memoria rechaza sin cambiar contadores y libera por PID una sola vez.
+- Ownership/copia/move de la lista sin fugas ni referencias colgantes.
+- Unidades y rangos claros; sin planificación dentro del modelo.
+- Registrar compilación/pruebas realmente ejecutadas; no presentar presencia de archivos como resultado PASS.

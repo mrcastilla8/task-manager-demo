@@ -1,422 +1,113 @@
-# Simulador de Concurrencia con Cola de Prioridad
+# Indicaciones generales de ConcurrentSimulator
 
-## 1. Objetivo general
+> **Instrucción canónica para trabajo v2:** aplique DP-01–DP-11 y los contratos candidatos descritos aquí y en [DECISIONES_APROBADAS.md](docs/DECISIONES_APROBADAS.md), [CONTRATOS_V2.md](docs/CONTRATOS_V2.md) y [MIGRACION_CONTRATOS_V2.md](docs/MIGRACION_CONTRATOS_V2.md). Este diseño aún no está operativo. Las reglas v1 se conservan solo para consumidores existentes y el apartado de contexto histórico; no son tareas pendientes para v2. Castilla aún usa `std::list`; cambiarla pertenece a una fase posterior.
 
-Desarrollar en **C++** una aplicación con **interfaz gráfica obligatoria** que simule la gestión y planificación de procesos mediante una **cola/lista dinámica con prioridades**, **cuota de tiempo (quantum)** y **time-sharing**.
 
-El proyecto tendrá dos modos de ejecución:
+## Propósito y documentos de referencia
 
-1. **Modo simulación lógica:** sin hilos reales.
-2. **Modo concurrente:** con `std::thread`, `std::mutex` y `std::condition_variable`.
+ConcurrentSimulator simula la admisión, planificación, memoria y ejecución por turnos de procesos en un CPU lógico. Esta guía conserva la separación entre requisitos docentes, decisiones aprobadas, propuestas técnicas por ratificar y contexto histórico.
 
-Ambos modos deben usar la misma política de planificación y mostrar el mismo tipo de información en la interfaz.
+Orden recomendado de lectura: [README](README.md), [especificación funcional](docs/ESPECIFICACION_FUNCIONAL.md), [requisitos del docente](docs/REQUISITOS_DOCENTE.md), [decisiones pendientes](docs/DECISIONES_PENDIENTES.md), [matriz de trazabilidad](docs/MATRIZ_TRAZABILIDAD.md), [casos de referencia](docs/CASOS_REFERENCIA.md), [contratos v1.0](contracts/README.md) y la asignación individual 01–05.
 
----
+Las fuentes académicas son las notas, págs. 23–29, y la explicación del 1 de octubre de 2026, 00:03:59–00:14:22. Se excluyen las secciones ajenas de QR, multiplicación de matrices, speedup y grafos de dependencias. Los documentos académicos se mantienen fuera del repositorio.
 
-## 2. Base conceptual del proyecto
+Toda regla relevante debe identificarse como `CONFIRMADO_POR_DOCENTE`, `PROPUESTA_DOCENTE`, `DECISION_EQUIPO` o `PENDIENTE_CONFIRMACION`, con fuente y página/minuto. Las reglas v2 aprobadas rigen el diseño destino; las firmas concretas siguen sujetas a ratificación de la API candidata. La documentación canónica define el contenido de estas etiquetas.
 
-Cada proceso debe manejar, como mínimo:
+## Alcance funcional
 
-- `id`
-- `nombre`
-- `tamaño`
-- `estado`
-- `cuota de tiempo`
-- `prioridad`
-- `tiempo total`
-- `tiempo restante`
-- `tiempo de espera`
+### Procesos y estados
 
-Estados mínimos:
+Las notas enumeran ID, nombre, tamaño en bytes, estado, cuota en milisegundos y prioridad. En el destino v2 `AltaProceso` no recibe prioridad, cuota ni ticket; el proceso almacena prioridad automática y la cuota vigente se deriva con `cuotaMs(prioridad)`. La cuota del turno se fija separadamente al despacho. El contrato raíz v1.0 sigue para código existente, sin cambios en esta fase.
 
-- `READY`
-- `RUN`
-- `WAIT`
-- `FINISH`
-- `CANCEL`
+Estados: `READY`, `RUN`, `WAIT`, `FINISH` y `CANCEL`. El diagrama docente de la pág. 27 dibuja READY→RUN, RUN→WAIT/FINISH/CANCEL y WAIT→READY; cada flecha confirma que esa transición está representada, sin fijar disparador ni duración. La pág. 28 explica que, tras pasar el tiempo asignado a un proceso, entra otro; no especifica el estado del proceso anterior ni dibuja RUN→READY. La matriz con procedencia de cada transición está en la [especificación funcional](docs/ESPECIFICACION_FUNCIONAL.md); una flecha ausente no se considera prohibición.
 
-La estructura de procesos debe ser dinámica: pueden ingresar procesos nuevos mientras la simulación está ejecutándose y otros pueden finalizar o cancelarse.
+### Política y unidades de tiempo
 
----
+**Contrato v1.0 histórico y todavía vigente para código existente:** prioridades 1–10, quantum configurable 500 ms y aging 2,000 ms. Para el destino v2 estas políticas fueron sustituidas por DP-01, DP-04 y DP-10: consulte la tabla aprobada arriba. No atribuir las reglas v1 al docente.
 
-## 3. Política de planificación acordada
+**Base docente adoptada por el equipo para v2:** `AssignPriority()` calcula las bandas estrictas P1/P2/P3 (notas, pág. 24); DP-01/03 formalizan precedencia y fórmula exacta. DP-02 define TL y cuándo publicar reclasificación. Consulte [DECISIONES_APROBADAS.md](docs/DECISIONES_APROBADAS.md); esas decisiones ya no están pendientes.
 
-Se utilizará:
+Las notas listan cuota por proceso (pág. 23). El ejemplo de la transcripción `prioridad × 10 ms` (00:11:50–00:12:07) no era requisito docente; DP-04 lo adopta como decisión fija del equipo para v2: máximo 10/20/30 ms. El quantum global v1 sigue solo para compatibilidad del código anterior.
 
-**Priority Scheduling + Round Robin entre empates + Aging**
+**Distinciones necesarias:** el Scheduler común compara prioridad descendente, ticket ascendente y PID ascendente; el motor asigna ticket nuevo al reingresar READY tras WAIT/cuota. La observación de `ordenLlegada` y quantum pertenece a auditoría histórica v1, no modifica las reglas ya aprobadas para v2.
 
-Reglas:
+### Avance temporal y salidas
 
-- Prioridades entre `1` y `10`.
-- `10` representa la prioridad más alta.
-- Quantum por defecto: `500 ms` simulados.
-- El quantum debe poder configurarse desde la GUI.
-- Siempre se selecciona el proceso `READY` con mayor `prioridadActual`.
-- Si dos o más procesos tienen la misma prioridad, se aplica FIFO/Round Robin.
-- Un proceso que consume su quantum y no termina pasa de `RUN` a `READY`.
-- Un proceso que termina pasa de `RUN` a `FINISH`.
-- Un proceso que realiza E/S pasa de `RUN` a `WAIT`, y luego de `WAIT` a `READY`.
-- Un proceso puede pasar a `CANCEL` por acción del usuario.
-- Aging:
-  - Cada `2000 ms` simulados esperando en `READY`, la prioridad actual aumenta en `+1`.
-  - La prioridad máxima es `10`.
-  - Al recibir CPU, la prioridad actual vuelve a su prioridad base.
+El tiempo del modelo usa milisegundos simulados, independientes del tiempo físico y de animación. Por DP-07, `siguientePaso()` exige PAUSADO y representa una ráfaga hasta cuota/WAIT/FINISH/CANCEL; sin READY pero con WAIT avanza idle hasta el despertar más próximo y difiere el despacho al siguiente paso. El modo continuo itera esa misma unidad. Velocidades visuales son opcionales y no alteran reloj/cuota.
 
-Estos valores deben quedar centralizados en configuración para poder modificarlos sin cambiar la lógica principal.
+Registrar eventos de admisión, despacho, reclasificación, cuota, WAIT/retorno, FINISH, CANCEL e idle conforme a v2; no hay evento de aging activo. RUN→READY por cuota es decisión de equipo para v2, no se atribuye a una flecha docente. La GUI reproduce RUN transitorio desde snapshots/eventos sin avanzar reloj. Timeline muestra CPU atribuido y hueco idle sin PID ficticio. Ambos motores se comparan con los mismos pasos y resultados observables.
 
----
+## Requisitos visuales
 
-## 4. Comportamiento del quantum
+La pantalla integra controles, tabla de procesos, cola READY con prioridades, CPU lógico, mapa conceptual de memoria, timeline, registro de eventos y estado del simulador. Las notas muestran atributos del proceso (pág. 23), el flujo proceso/cola/memoria/procesador (pág. 29), y la comparación visual de serial frente a time-sharing (pág. 28).
 
-Para cada proceso seleccionado:
+El timeline muestra bloques proporcionales solo para CPU realmente ejecutado por PID positivo. Idle son huecos inferidos desde 0 hasta el tiempo del snapshot, antes/entre/después de bloques, sin asignar PID ni crear bloques idle. Historial abarca la sesión completa con scroll/zoom; la representación eficiente no descarta eventos. La memoria muestra ocupación proporcional por PID y espacio libre, sin direcciones inventadas.
 
-```text
-READY
-  ↓
-RUN
-  ↓
-Ejecuta min(quantum, tiempoRestante)
-  ↓
-¿terminó?
- ├─ Sí → FINISH
- └─ No → READY
-```
+DP-11 aprueba Qt 6 + C++17 + CMake como decisión de equipo, no como requisito atribuido al docente. Los controles no exponen quantum global configurable ni prioridad manual.
 
-El simulador no debe actualizar la GUI cada milisegundo. La interfaz se actualiza únicamente cuando ocurre un evento significativo.
+## Arquitectura y contratos
 
-Eventos mínimos:
+**Decisión de equipo aprobada:** mantener un motor lógico sin threads reales y un motor concurrente con threads reales; ambos implementan la misma interfaz y Scheduler, y representan un CPU lógico único. Los workers no equivalen a núcleos simulados.
 
-- proceso creado
-- proceso admitido
-- `READY → RUN`
-- quantum finalizado
-- `RUN → READY`
-- `RUN → WAIT`
-- `WAIT → READY`
-- `RUN → FINISH`
-- aging aplicado
-- proceso cancelado
+La GUI depende de una interfaz común candidata `IExecutionEngine` y snapshots `EstadoSistema`; no selecciona prioridades ni toca widgets desde workers. Los headers raíz `contracts/*.h` siguen como API v1.0 del código actual; `contracts/v2/` contiene candidatos no operativos hasta ratificación e integración.
 
----
+## Responsabilidades y rutas
 
-## 5. Velocidad lógica y velocidad visual
+| Integrante | Responsable | Rama de trabajo | Entregables principales | Límites |
+|---|---|---|---|---|
+| 1. Modelo y memoria | Castilla | `castilla` | `contracts/`; `core/ColaProcesos.h/.cpp`; `core/Memoria.h/.cpp`; pruebas de proceso, cola y memoria | No implementa scheduler, threads ni GUI |
+| 2. Scheduler | Brickzon | `brickzon` | `scheduler/Scheduler.h/.cpp`; `scheduler/SchedulerConfig.h`; pruebas de prioridad, empate y tickets; revisar/eliminar test v1 de aging | No implementa GUI, threads ni timers visuales |
+| 3. Motor lógico | Aldana | `aldana` | `simulation/SimulationEngine.h/.cpp`; `simulation/SimulationClock.h/.cpp`; cinco pruebas de simulación | No implementa GUI, workers ni política propia de prioridad |
+| 4. Motor concurrente | Ángel | `angel` | `concurrent/ConcurrentEngine.h/.cpp`; `ProcessThread.h/.cpp`; `Synchronization.h`; cinco pruebas concurrentes | No duplica Scheduler ni actualiza Qt |
+| 5. GUI e integración | Poma | `poma` | `gui/MainWindow.*`, tabla, cola, CPU, memoria, timeline, log y diálogo de alta; `main.cpp` | No decide política de scheduling ni sincroniza internamente los workers |
 
-La velocidad del algoritmo y la velocidad con la que se muestra en pantalla son conceptos diferentes.
+Las ramas identifican espacios de trabajo, no usuarios personales de GitHub. El [workflow canónico](docs/WORKFLOW_DESARROLLO.md) explica fases, dependencias, trabajo paralelo, gates y PRs. Esta tabla indica ownership funcional; no certifica que los entregables estén implementados o probados.
 
-Ejemplo:
+## Workflow de desarrollo
 
-- Quantum lógico: `500 ms`
-- Duración visual del paso: `800 ms reales`
+La fase de decisiones está cerrada. Ratifica las propuestas técnicas que afectan el detalle concurrente/API, migra primero modelo y Scheduler, desarrolla ambos motores en paralelo con contrato estable y permite que GUI avance con un mock. Consulta [docs/WORKFLOW_DESARROLLO.md](docs/WORKFLOW_DESARROLLO.md) para gates.
 
-La interfaz debe permitir:
+Para código integrado rige v1.0. Para diseño futuro y trabajo v2 rigen DP-01–DP-11 y los contratos candidatos, sin tratarlos como API operativa antes de ratificación. Las alternativas de `DECISIONES_PENDIENTES.md` son deliberación histórica; no son tareas de decisión aún abiertas.
 
-- Pausar
-- Continuar
-- Reiniciar
-- Ejecutar paso a paso
-- Cambiar velocidad visual
-- Cambiar quantum
+## Dependencias entre módulos
 
-Velocidades visuales sugeridas:
+- Modelo y contratos son base de Scheduler, motores y GUI. Mantener firmas estables.
+- Scheduler depende del contrato `Proceso`; ambos motores reutilizan su selector y configuración.
+- El motor lógico depende de contratos, modelo y Scheduler; puede usar dobles de prueba temporales mientras se implementan esas dependencias.
+- El motor concurrente depende de contratos, modelo y Scheduler; no necesita GUI para pruebas.
+- GUI puede comenzar con un mock de `IExecutionEngine` y snapshots de `EstadoSistema`; luego integra primero el motor lógico y después el concurrente.
 
-- `0.25x`
-- `0.5x`
-- `1x`
-- `2x`
-- `5x`
+## Secuencia de integración sugerida por el equipo
 
----
+1. Preservar v1.0; revisar/adoptar contratos candidatos v2 y ratificar propuestas.
+2. Migrar modelo, validaciones, lista enlazada y memoria.
+3. Migrar Scheduler y escenarios aislados sin aging.
+4. Construir GUI inicial con mock para trabajar en paralelo.
+5. Integrar y comparar primero el motor lógico.
+6. Integrar el motor concurrente y verificar sincronización/terminación.
+7. Comparar ambos motores con los mismos escenarios aprobados.
+8. Completar integración GUI, demo y validación del equipo.
 
-## 6. Interfaz gráfica
+La secuencia prepara migración; añadir headers candidatos por sí solo no hace la API operativa.
 
-La interfaz debe contener, como mínimo:
+## Escenarios mínimos de demostración del equipo
 
-### 6.1 Controles
-
-- Selector de modo:
-  - Simulación lógica
-  - Threads reales
-- Quantum
-- Velocidad
-- Agregar proceso
-- Iniciar
-- Pausar
-- Paso siguiente
-- Reiniciar
-
-### 6.2 Tabla de procesos
-
-Columnas sugeridas:
-
-- PID
-- Nombre
-- Tamaño
-- Prioridad base
-- Prioridad actual
-- Estado
-- Tiempo restante
-- Tiempo de espera
-- Acción de cancelar
-
-### 6.3 Cola de prioridad
-
-Representación gráfica ordenada de los procesos `READY`.
-
-Ejemplo:
-
-```text
-[B P8] → [A P6] → [C P4]
-```
-
-La cola debe actualizarse visualmente cuando cambie el orden.
-
-### 6.4 Procesador
-
-Debe mostrar:
-
-- proceso actualmente ejecutándose
-- estado `RUN`
-- prioridad
-- quantum consumido
-- tiempo restante
-
-### 6.5 Memoria simulada
-
-Mostrar:
-
-- capacidad total
-- memoria utilizada
-- procesos cargados
-
-No se requiere implementar administración avanzada de memoria.
-
-### 6.6 Timeline / Time-Sharing
-
-Debe conservar el historial de ejecución.
-
-Ejemplo:
-
-```text
-| A | A | B | C | A | B | C |
-0  0.5 1  1.5 2  2.5 3  3.5
-```
-
-### 6.7 Log de eventos
-
-Ejemplo:
-
-```text
-00:02.000  B prioridad 6 → 7 por aging
-00:02.500  A READY → RUN
-00:03.000  A agotó quantum
-00:03.000  A RUN → READY
-```
-
----
-
-## 7. Arquitectura común
-
-Los cinco integrantes deben trabajar contra contratos comunes.
-
-```text
-contracts/
-    Proceso.h
-    Estado.h
-    Evento.h
-    EstadoSistema.h
-    IExecutionEngine.h
-```
-
-### Contrato principal
-
-```cpp
-class IExecutionEngine {
-public:
-    virtual ~IExecutionEngine() = default;
-
-    virtual void agregarProceso(const Proceso& proceso) = 0;
-    virtual void cancelarProceso(int pid) = 0;
-
-    virtual void iniciar() = 0;
-    virtual void pausar() = 0;
-    virtual void reiniciar() = 0;
-    virtual void siguientePaso() = 0;
-
-    virtual EstadoSistema obtenerEstado() const = 0;
-};
-```
-
-### Estado compartido
-
-```cpp
-struct EstadoSistema {
-    long tiempoSimulado;
-
-    std::vector<Proceso> procesos;
-    std::vector<int> colaPrioridad;
-
-    int pidEjecutando;
-
-    int memoriaUsada;
-    int memoriaTotal;
-
-    std::vector<Evento> eventos;
-    std::vector<BloqueTimeline> timeline;
-};
-```
-
-La GUI solo debe depender de `IExecutionEngine` y `EstadoSistema`.
-
----
-
-## 8. División del equipo
-
-| Integrante | Módulo |
-|---|---|
-| 1 | Modelo, estructuras de datos y memoria simulada |
-| 2 | Scheduler y política de planificación |
-| 3 | Motor de simulación lógica sin threads |
-| 4 | Motor concurrente con threads |
-| 5 | GUI, visualización e integración |
-
-Cada integrante tiene un archivo independiente con sus responsabilidades y criterios de aceptación.
-
----
-
-## 9. Estructura sugerida del repositorio
-
-```text
-ConcurrentSimulator/
-│
-├── contracts/
-│   ├── Proceso.h
-│   ├── Estado.h
-│   ├── Evento.h
-│   ├── EstadoSistema.h
-│   └── IExecutionEngine.h
-│
-├── core/
-│   ├── ColaProcesos.h
-│   ├── ColaProcesos.cpp
-│   ├── Memoria.h
-│   └── Memoria.cpp
-│
-├── scheduler/
-│   ├── Scheduler.h
-│   └── Scheduler.cpp
-│
-├── simulation/
-│   ├── SimulationEngine.h
-│   └── SimulationEngine.cpp
-│
-├── concurrent/
-│   ├── ConcurrentEngine.h
-│   ├── ConcurrentEngine.cpp
-│   ├── ProcessThread.h
-│   └── ProcessThread.cpp
-│
-├── gui/
-│   ├── MainWindow.h
-│   ├── MainWindow.cpp
-│   ├── ProcessTable.*
-│   ├── QueueWidget.*
-│   ├── CPUWidget.*
-│   ├── MemoryWidget.*
-│   └── TimelineWidget.*
-│
-├── tests/
-├── CMakeLists.txt
-└── README.md
-```
-
----
-
-## 10. Regla de integración
-
-Ningún módulo debe modificar directamente la lógica interna de otro.
-
-- La GUI no decide prioridades.
-- El scheduler no dibuja componentes.
-- El modelo no ejecuta threads.
-- El motor sin threads no contiene código gráfico.
-- El motor concurrente no modifica widgets directamente.
-- Los threads nunca actualizan la GUI directamente.
-- La comunicación se hace mediante contratos, estados y eventos.
-
----
-
-## 11. Orden recomendado de trabajo
-
-1. Acordar y congelar los archivos de `contracts/`.
-2. Cada integrante implementa su módulo.
-3. Integrante 5 construye la GUI inicialmente con datos simulados/mock.
-4. Integrar primero `SimulationEngine`.
-5. Validar comportamiento.
-6. Integrar `ConcurrentEngine`.
-7. Comparar ambos modos con los mismos escenarios.
-8. Ejecutar pruebas de integración.
-9. Preparar escenarios de demostración.
-
----
-
-## 12. Escenarios mínimos para demostrar
-
-### Escenario A — Prioridad
-
-```text
-A: prioridad 8
-B: prioridad 5
-C: prioridad 3
-```
-
-Debe ejecutar primero `A`.
-
-### Escenario B — Empate
-
-```text
-A: prioridad 8
-B: prioridad 8
-```
-
-Se resuelve por orden FIFO/Round Robin.
-
-### Escenario C — Aging
-
-Un proceso de baja prioridad debe aumentar progresivamente su prioridad mientras espera.
-
-### Escenario D — WAIT
-
-Un proceso entra a `WAIT` por una operación de E/S y posteriormente regresa a `READY`.
-
-### Escenario E — Proceso dinámico
-
-Se agrega un nuevo proceso mientras el simulador ya está ejecutándose.
-
-### Escenario F — Cancelación
-
-El usuario cancela un proceso desde la GUI.
-
-### Escenario G — Comparación de motores
-
-El mismo conjunto de procesos se ejecuta en:
-
-- modo simulación lógica
-- modo threads reales
-
----
-
-## 13. Criterio general de finalización
-
-El proyecto se considera terminado cuando:
-
-- compila correctamente;
-- los dos motores pueden seleccionarse desde la misma GUI;
-- la cola cambia visualmente;
-- el CPU muestra el proceso en ejecución;
-- el timeline conserva el historial;
-- la simulación puede pausarse y ejecutarse paso a paso;
-- se pueden agregar y cancelar procesos;
-- las prioridades y el aging funcionan;
-- los estados cambian correctamente;
-- el modo con threads utiliza sincronización segura;
-- ambos modos siguen la misma política de planificación.
+| Caso | Entrada | Resultado esperado bajo la política destino v2 |
+|---|---|---|
+| A. Prioridad/cuota | Tamaños clasifican P1/P2/P3 | Clase automática; cuota máxima 10/20/30 ms |
+| B. Empate/RR | READY de igual prioridad; un proceso agota cuota | Menor ticket primero; al reingresar recibe ticket nuevo |
+| C. Espera | Proceso pasa RUN→WAIT | Al despertar entra READY con ticket nuevo; CPU idle aparece como hueco inferido |
+| D. Alta dinámica | Alta válida durante RUN / alta rechazada | RUN y cuota fijada continúan; rechazo no muta TL/prioridades |
+| E. Cancelación | READY, RUN o WAIT | CANCEL terminal; contabilizar solo CPU simulada ejecutada |
+| F. Motores | Misma entrada y secuencia de pasos | Igual reloj, estados, eventos y timeline entre motores |
+
+Los casos reproducibles completos están en [CASOS_REFERENCIA.md](docs/CASOS_REFERENCIA.md).
+
+## Criterio de cierre del proyecto
+
+- Aplicación GUI integrada con lista, cola, CPU, memoria, timeline, log y controles.
+- Altas, cancelaciones, pausa, reinicio y paso de acuerdo con contrato y decisiones ratificadas.
+- Prioridad/cuota, estados, E/S y tiempos coherentes; no aging activo.
+- Los dos motores comparten interfaz y Scheduler y dan resultados equivalentes con sincronización segura.
+- Evidencia académica separada de decisiones del equipo y de propuestas técnicas por ratificar.
+- Compilación y pruebas reproducibles documentadas para la entrega final. Esta guía no afirma que se hayan ejecutado durante la auditoría documental.
