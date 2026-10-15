@@ -1,5 +1,7 @@
 # Matriz de trazabilidad de requisitos
 
+> **Actualización Fase 0 (2026-10-15):** DP-01–DP-11 están cerradas por decisión del equipo. La columna Estado histórica de las filas DP debajo conserva lo que se desconocía antes de su aprobación; no significa que sigan abiertas. Sus criterios de aceptación se actualizan con los casos v2 al final. El código vigente es v1 y aún no satisface necesariamente el destino.
+
 La columna “criterio” describe evidencia documental verificable para cerrar el requisito o la decisión; no es afirmación de que la implementación ya lo cumpla. Las fuentes académicas se localizan en [Requisitos del docente](REQUISITOS_DOCENTE.md). Código vinculado es referencia de auditoría, no autorización para modificarlo en esta tarea.
 
 | ID | Requisito o diferencia | Fuente / clasificación | Documentación afectada | Código relacionado | Estado | Criterio de aceptación documental |
@@ -30,3 +32,21 @@ La columna “criterio” describe evidencia documental verificable para cerrar 
 | DP-10 | Aging 2,000 ms vs recálculo por tamaño | Política equipo vs transcripción 12:07–14:22, `PENDIENTE_CONFIRMACION` | Scheduler, especificación, decisiones, casos | `Scheduler.cpp`, `Configuracion.h` | Ambos mecanismos descritos, relación pendiente | Aging no se elimina y las diferencias se explican |
 | DP-11 | Qt 6 recomendado; motores lógico y concurrente | Documento Poma; estructura de ramas, `DECISION_EQUIPO`/`PENDIENTE_CONFIRMACION` | README, GUI, decisiones | No hay Qt ni motor lógico en ramas examinadas | Recomendación, no dependencia confirmada | No elevar toolkit a obligatorio; distinguir hilos reales de modelo de CPU |
 | API-01 | Contratos comunes congelados en v1.0 | `contracts/README.md`, `DECISION_EQUIPO` | Todas las asignaciones y especificación | `contracts/*.h` | Vigente y preservado | Ningún encabezado cambia; cambios futuros se proponen como nueva versión |
+
+## Trazabilidad de decisiones aprobadas v2
+
+| ID | Decisión (DECISION_EQUIPO) | Fuente de autoridad | Artefactos | Estado | Criterio documental verificable |
+|---|---|---|---|---|---|
+| DP-01 | P1–P3 automáticas por tamaño; P3 máxima; no prioridad manual/1–10 activa en v2 | [Registro aprobado](DECISIONES_APROBADAS.md#dp-01--prioridades), D01–D04 | Contrato, especificación, casos, asignaciones | Aprobada; código v1 sigue 1–10 | API alta no toma prioridad; caso de orden P3>P2>P1 |
+| DP-02 | TL=READY/RUN/WAIT; recalcular tras admisión exitosa/FINISH/CANCEL; publicación antes del siguiente despacho; cuota RUN fijada | [DP-02](DECISIONES_APROBADAS.md#dp-02--población-y-recalculo), D05–D07 | Contrato, casos, motores | Aprobada | Casos llegada/rechazo/terminalidad muestran inclusión/efectos |
+| DP-03 | Fórmula estricta exacta D/X; A=B→P3; TL vacía no calcula | [DP-03](DECISIONES_APROBADAS.md#dp-03--algoritmo-exacto), D08–D09 | Contrato, casos | Aprobada | Fronteras y límites int64 documentados; overflow no ocurre |
+| DP-04 | Cuota máxima 10/20/30 por despacho; sin quantum global/aging v2 | [DP-04](DECISIONES_APROBADAS.md#dp-04--cuotas-individuales), D10–D11 | Headers v2, contrato, casos, migración | Aprobada | Campo turno fijado; API no tiene configurar/obtener quantum |
+| DP-05 | READY priority desc/ticket asc/PID asc; ticket creciente por cada entrada READY | [DP-05](DECISIONES_APROBADAS.md#dp-05--cola-y-round-robin), D12–D13 | Contrato, casos, Scheduler futuro | Aprobada | FIFO iguales y Round Robin con ticket nuevo |
+| DP-06 | Cancel desde READY/RUN/WAIT; terminalidad; CPU parcial real simulada/timeline solo intervalo positivo | [DP-06](DECISIONES_APROBADAS.md#dp-06--estados-y-cancelación), D14 | Contrato, casos, motor | Aprobada; punto seguro exacto requiere ratificación | No hay segmento de cero duración; memoria liberada una vez |
+| DP-07 | Paso único con turno o avance idle hasta despertar, despacho siguiente paso; exige PAUSADO | [DP-07](DECISIONES_APROBADAS.md#dp-07--paso-y-tiempo-simulado), D15 | Contrato, motores, casos | Aprobada | Traza por paso coincide; idle no carga PID |
+| DP-08 | Timeline idle, historia sesión completa, scroll/zoom, memoria proporcional, replay RUN; GUI no mueve reloj | [DP-08](DECISIONES_APROBADAS.md#dp-08--gui-y-timeline), D16 | Contrato, especificación, GUI futura | Aprobada | replay conserva eventos fuente y no altera reloj |
+| DP-09 | Lista simple dinámica; ownership/copia/move/destrucción seguros; core v1 queda intacto en Fase 0 | [DP-09](DECISIONES_APROBADAS.md#dp-09--estructura-enlazada), D17 | Contrato/migración, asignación Castilla | Aprobada para trabajo futuro | API compatible y pruebas de vida/propiedad en migración |
+| DP-10 | Sin aging activo; espera solo métrica | [DP-10](DECISIONES_APROBADAS.md#dp-10--aging), D18 | Contrato, Scheduler futuro, casos | Aprobada | P sin cambio por tiempo de espera |
+| DP-11 | Qt6/C++17/CMake; motores Aldana/Ángel comunes; Poma no planifica; un CPU lógico | [DP-11](DECISIONES_APROBADAS.md#dp-11--interfaz-y-motores), D19 | Contrato, workflow, asignaciones | Aprobada | mock y motores implementan misma interfaz; traces equivalentes |
+
+La presencia de los headers solo cubre contrato propuesto. No acredita implementación, pruebas de módulos, ni integración.

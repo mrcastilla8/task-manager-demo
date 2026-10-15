@@ -1,5 +1,7 @@
 # Integrante 3 — Motor de simulación lógica
 
+> **Adenda Fase 0 — destino futuro:** Aldana migra el motor lógico a v2: turnos/cuotas, eventos, WAIT y saltos idle, paso a paso, cancelación y timeline. Debe reutilizar Scheduler y compartir semántica observable con el motor concurrente. No se incluye implementación en Fase 0. Consulte [decisiones](docs/DECISIONES_APROBADAS.md), [contrato](docs/CONTRATOS_V2.md) y [plan](docs/MIGRACION_CONTRATOS_V2.md).
+
 **Responsable:** Aldana · **Rama:** `aldana` · **Workflow:** [fase 3](docs/WORKFLOW_DESARROLLO.md#fase-3--motores-de-ejecucion)
 
 Asignación recuperada de `origin/aldana`. Este módulo es el motor de referencia sin threads reales: mantiene un reloj simulado y avanza procesos como objetos. La carpeta `simulation/` y su implementación aún no aparecen en las ramas revisadas; las rutas abajo son entregables previstos, no archivos ya existentes.

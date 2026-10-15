@@ -1,5 +1,7 @@
 # Integrante 1 — Modelo, estructuras de datos y memoria
 
+> **Adenda Fase 0 — destino futuro:** Castilla implementa modelo v2, validaciones, cuota derivada, lista simplemente enlazada, memoria y compatibilidad de cola. No editar `core/` ni v1 durante preparación documental. Detalle en [decisiones](docs/DECISIONES_APROBADAS.md), [contrato](docs/CONTRATOS_V2.md) y [plan](docs/MIGRACION_CONTRATOS_V2.md). La asignación original conserva su contexto histórico v1.
+
 **Responsable:** Castilla · **Rama:** `castilla` · **Workflow:** [fase 1](docs/WORKFLOW_DESARROLLO.md#fase-1--modelo-estructuras-de-datos-y-memoria)
 
 Esta asignación conserva el alcance de `master`/`castilla` y devuelve las rutas, las operaciones esperadas y los escenarios originales. Para interfaces exactas, los encabezados actuales de `contracts/` y `core/` son normativos; ejemplos antiguos que no coinciden con ellos no deben copiarse.

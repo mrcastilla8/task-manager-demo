@@ -1,5 +1,7 @@
 # Integrante 5 — GUI, visualización e integración
 
+> **Adenda Fase 0 — destino futuro:** Poma implementa GUI Qt 6/C++17, mock v2, alta sin prioridad manual, CPU/temporizador, memoria, timeline, historial y reproducción visual; integra ambos motores. Widgets muestran snapshots/eventos, no planifican ni avanzan reloj. Animación no equivale a CPU. No se escribe GUI en esta fase. Consulte [decisiones](docs/DECISIONES_APROBADAS.md), [contrato](docs/CONTRATOS_V2.md) y [plan](docs/MIGRACION_CONTRATOS_V2.md).
+
 **Responsable:** Poma · **Rama:** `poma` · **Workflow:** [fase 4](docs/WORKFLOW_DESARROLLO.md#fase-4--gui-y-visualizacion)
 
 Asignación recuperada de `origin/poma`. Qt 6 + C++ se conserva como **recomendación del equipo**, no requisito del docente ni toolkit aprobado. La GUI debe poder empezar con un mock mientras los motores avanzan.

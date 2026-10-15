@@ -1,5 +1,7 @@
 # Integrante 2 — Scheduler y política de planificación
 
+> **Adenda Fase 0 — destino futuro:** Brickzon implementa clasificación exacta P1–P3, selección prioridad/ticket/PID, FIFO/Round Robin mediante tickets nuevos al volver a READY y sin aging activo. Un único Scheduler se reutiliza en ambos motores. No modificar implementación en esta fase. Consulte [decisiones](docs/DECISIONES_APROBADAS.md), [contrato](docs/CONTRATOS_V2.md) y [plan](docs/MIGRACION_CONTRATOS_V2.md).
+
 **Responsable:** Brickzon · **Rama:** `brickzon` · **Workflow:** [fase 2](docs/WORKFLOW_DESARROLLO.md#fase-2--scheduler)
 
 Asignación recuperada de `origin/brickzon`; `origin/angel` contiene la misma responsabilidad funcional. Se restituye la superficie operativa original, ajustando métodos y unidades a la implementación real de `scheduler/`.

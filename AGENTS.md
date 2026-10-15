@@ -1,5 +1,8 @@
 # Guía de trabajo para agentes
 
+> **Fase 0 (2026-10-15):** DP-01–DP-11 fueron aprobadas por coordinación y formalizadas en [DECISIONES_APROBADAS.md](docs/DECISIONES_APROBADAS.md). Aplican al diseño futuro v2, no cambian v1.0. Contratos candidatos están en `contracts/v2/`; no se migran implementaciones ni se declaran integrados. Las propuestas técnicas no ratificadas permanecen separadas. Siga [CONTRATOS_V2.md](docs/CONTRATOS_V2.md), [MIGRACION_CONTRATOS_V2.md](docs/MIGRACION_CONTRATOS_V2.md) y gates de [WORKFLOW_DESARROLLO.md](docs/WORKFLOW_DESARROLLO.md). En caso de conflicto, encabezados v1 gobiernan código existente; decisiones aprobadas y contrato v2 gobiernan el destino de migración.
+
+
 ## Lectura obligatoria
 
 1. Lee [README.md](README.md), [guía general](00_INDICACIONES_GENERALES_PROYECTO.md), [especificación funcional](docs/ESPECIFICACION_FUNCIONAL.md) y [matriz de trazabilidad](docs/MATRIZ_TRAZABILIDAD.md).
@@ -16,9 +19,9 @@
 - Cada regla debe identificarse como `CONFIRMADO_POR_DOCENTE`, `PROPUESTA_DOCENTE`, `DECISION_EQUIPO` o `PENDIENTE_CONFIRMACION` con fuente y ubicación.
 - Los documentos académicos contienen temas ajenos. No importar QR, multiplicación de matrices, speedup ni grafos al simulador.
 
-## Decisiones abiertas que afectan implementación
+## Decisiones cerradas; detalles para ratificación técnica
 
-Consulta DP-01 a DP-11. En particular: escala 1–3 vs 1–10; conjunto TL y recálculo dinámico; cuota individual vs quantum global 500 ms; FIFO y actualización de orden al reingresar; aging vs recálculo por tamaño; semántica de `siguientePaso()`; transiciones/cancelación; timeline idle/escala/historial; mapa conceptual de memoria; `std::list` vs lista enlazada simple; y aprobación de Qt 6/dos motores.
+DP-01–DP-11 están aprobadas para el destino v2. Los detalles de ejecución concurrente, desempates simultáneos, publicación de snapshots/eventos, overflow de tickets y retención eficiente se encuentran como propuestas no ratificadas en el registro aprobado; no conviertas propuestas en política sin aprobación.
 
 No inventes reglas para llenar vacíos. Si una decisión impide continuar, completa primero el trabajo independiente, presenta alternativas con evidencia e impacto, y deja bloqueada solo la parte dependiente de la decisión.
 

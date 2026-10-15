@@ -1,5 +1,21 @@
 # Casos de referencia del simulador
 
+> **Adenda normativa para v2 candidata (2026-10-15):** P1–P13 debajo documentan escenarios de discusión y comportamiento v1/ramas; expectativas antiguas conflictivas no gobiernan v2. Casos destino aprobados — aún no implementados:
+
+## Escenarios v2 aprobados
+
+1. **Clasificación estricta:** A=12, B=96, D=84: S=39→P1; 40→P2; 67→P2; 68→P3; 96→P3. A=B da P3 para todos; TL vacía no calcula.
+2. **Desborde:** evaluar X=3(S-A) exactamente para tamaños válidos sin overflow; comparar casos próximos al límite de int64 con una referencia matemática exacta.
+3. **Reclasificación/cuota:** TL contiene READY/RUN/WAIT. Alta admitida, FINISH y CANCEL piden reclasificación antes del despacho siguiente. Alta no interrumpe RUN ni cambia cuota del turno fijado; alta rechazada no cambia TL/prioridades.
+4. **Cuotas:** P1/P2/P3 reciben máximos 10/20/30 ms. CPU agotada, WAIT o CANCEL pueden terminar antes; el cambio de TL no muta cuota del turno iniciado.
+5. **READY/RR:** prioridad descendente, ticket ascendente, PID ascendente. Reingreso tras cuota recibe ticket nuevo. No existe aging activo.
+6. **WAIT simultáneo:** orden determinista exacto queda sujeto a ratificación de la propuesta listada en [decisiones aprobadas](DECISIONES_APROBADAS.md#propuestas-técnicas-no-ratificadas).
+7. **Cancelación:** READY/RUN/WAIT→CANCEL; terminales siguen en historial; CPU/timeline incluyen solo CPU efectivamente ejecutada y duración positiva. Punto seguro determinista aún requiere ratificación técnica.
+8. **Paso:** PAUSADO+READY ejecuta turno hasta cuota/WAIT/FINISH/CANCEL; sin READY pero WAIT, adelanta al despertar más próximo sin despacho en ese paso; sin trabajo activo finaliza.
+9. **Idle/vista:** intervalo CPU vacío sin PID ficticio; la vista reproduce RUN transitorio desde eventos/snapshots, no avanza reloj y ofrece historial, zoom y scroll.
+10. **Memoria/historial:** representación proporcional por PID y espacio libre; procesos FINISH/CANCEL permanecen en historia aunque salgan de TL/liberen memoria.
+11. **Motores:** mismos pasos/entradas deben dar mismo reloj, prioridad, estados, eventos y timeline en lógico/concurrente; tiempo de threads no equivale a tiempo simulado.
+
 Los resultados se marcan como **normativos** solo cuando la evidencia o el contrato actual los fija. Los casos **ilustrativos** demuestran una regla sin convertir todos sus parámetros en requisitos. Los casos **pendientes** no tienen un único resultado hasta que se resuelva la decisión enlazada. Cada motor debe usar el mismo caso y configuración al comparar resultados.
 
 ## P1 — Tercios de tamaño y fronteras

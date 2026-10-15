@@ -1,5 +1,21 @@
 # Decisiones pendientes para ConcurrentSimulator
 
+> **Cierre Fase 0 (2026-10-15):** DP-01–DP-11 fueron aprobadas por coordinación antes de esta fecha y se formalizan en [DECISIONES_APROBADAS.md](DECISIONES_APROBADAS.md). Las alternativas de los apartados siguientes son historial de deliberación; no representan opciones actualmente abiertas ni política v2. v1.0 sigue vigente para el código presente. Precisiones de implementación no ratificadas están separadas como propuestas técnicas en el registro aprobado.
+
+| Decisión histórica | Cerrada | Registro normativo |
+|---|---|---|
+| DP-01 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-01--prioridades) |
+| DP-02 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-02--población-y-recalculo) |
+| DP-03 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-03--algoritmo-exacto) |
+| DP-04 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-04--cuotas-individuales) |
+| DP-05 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-05--cola-y-round-robin) |
+| DP-06 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-06--estados-y-cancelación) |
+| DP-07 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-07--paso-y-tiempo-simulado) |
+| DP-08 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-08--gui-y-timeline) |
+| DP-09 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-09--estructura-enlazada) |
+| DP-10 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-10--aging) |
+| DP-11 | 2026-10-15 (formalización; aprobación previa por coordinación) | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-11--interfaz-y-motores) |
+
 Las alternativas y propuestas de esta lista no están aprobadas. Resolverlas requiere acuerdo del equipo y, cuando corresponda, consulta al docente. El orden refleja impacto sobre contratos, módulos e interoperabilidad.
 
 ## DP-01 — Política prioritaria y compatibilidad de escalas

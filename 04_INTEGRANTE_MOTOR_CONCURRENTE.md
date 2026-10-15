@@ -1,5 +1,7 @@
 # Integrante 4 — Motor concurrente con threads reales
 
+> **Adenda Fase 0 — destino futuro:** Ángel migra motor concurrente a v2 con Scheduler compartido, CPU lógico único, cuotas/tickets, sincronización, cancelación segura y equivalencia con Aldana. El tiempo físico de threads nunca sustituye reloj simulado. No se modifica código en Fase 0. Consulte [decisiones](docs/DECISIONES_APROBADAS.md), [contrato](docs/CONTRATOS_V2.md) y [plan](docs/MIGRACION_CONTRATOS_V2.md).
+
 **Responsable:** Ángel · **Rama:** `angel` · **Workflow:** [fase 3](docs/WORKFLOW_DESARROLLO.md#fase-3--motores-de-ejecucion)
 
 Asignación recuperada de `origin/angel`. Se restituye el detalle de workers, coordinación, sincronización, cierre y pruebas, conservando que los hilos reales implementan un solo CPU lógico simulado.

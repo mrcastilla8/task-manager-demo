@@ -1,5 +1,8 @@
 # Indicaciones generales de ConcurrentSimulator
 
+> **Adenda Fase 0 (2026-10-15):** DP-01–DP-11 definen el destino v2; no alteran API v1 ni implementación existente. La política futura es P1–P3 automática por tamaño, cuota 10/20/30 ms, READY por prioridad/ticket/PID, sin aging; se conservan ambos motores sobre CPU lógico único y Qt 6/C++17/CMake. Consulte [decisiones](docs/DECISIONES_APROBADAS.md), [contratos v2 candidatos](docs/CONTRATOS_V2.md) y [migración](docs/MIGRACION_CONTRATOS_V2.md). El texto previo de quantum 500 ms/aging/prioridad manual describe v1 o antecedentes, no política activa v2. La rama de Castilla aún usa `std::list`; sustituirla es futuro trabajo, no realizado en Fase 0.
+
+
 ## Propósito y documentos de referencia
 
 ConcurrentSimulator simula la admisión, planificación, memoria y ejecución por turnos de procesos en un CPU lógico. Esta guía recupera el detalle de coordinación del proyecto original y conserva la separación entre requisitos docentes, decisiones de equipo, propuestas y decisiones pendientes.
@@ -20,11 +23,11 @@ Estados: `READY`, `RUN`, `WAIT`, `FINISH` y `CANCEL`. El diagrama docente de la 
 
 ### Política y unidades de tiempo
 
-**Decisión vigente del equipo:** prioridades actuales de 1 a 10 (10 máxima), selección entre READY por prioridad actual, desempate por orden de llegada, quantum global configurable predeterminado de 500 ms y aging cada 2,000 ms de espera READY, con incremento +1 hasta 10 y restauración de prioridad base al asignar CPU. No atribuir estas reglas al docente.
+**Contrato v1.0 histórico y todavía vigente para código existente:** prioridades 1–10, quantum configurable 500 ms y aging 2,000 ms. Para el destino v2 estas políticas fueron sustituidas por DP-01, DP-04 y DP-10: consulte la tabla aprobada arriba. No atribuir las reglas v1 al docente.
 
-**Requisito docente:** `AssignPriority()` calcula clases 1–3 usando `A=min(TL.Size)`, `B=max(TL.Size)`, `H=(B-A)/3`; clase 1 si `Size < A+H`, clase 2 si no se cumplió lo anterior y `Size < A+2H`, y clase 3 en otro caso (notas, pág. 24). La pág. 25 busca máxima prioridad; en el algoritmo presentado P3 tiene precedencia sobre P2 y P1. Pendiente solo decidir si se adopta esa escala o se adapta a la política actual 1–10. El conjunto TL y los momentos de recálculo son preguntas aparte.
+**Base docente adoptada por el equipo para v2:** `AssignPriority()` calcula las bandas estrictas P1/P2/P3 (notas, pág. 24); DP-01/03 formalizan precedencia y fórmula exacta. DP-02 define TL y cuándo publicar reclasificación. Consulte [DECISIONES_APROBADAS.md](docs/DECISIONES_APROBADAS.md); esas decisiones ya no están pendientes.
 
-Las notas listan una cuota por proceso en milisegundos (pág. 23). La fórmula `prioridad × 10 ms` es ejemplo del docente (transcripción, 00:11:50–00:12:07), no una regla fija. La cuota individual no es el quantum global del equipo; su convivencia sigue pendiente (DP-04).
+Las notas listan cuota por proceso (pág. 23). El ejemplo de la transcripción `prioridad × 10 ms` (00:11:50–00:12:07) no era requisito docente; DP-04 lo adopta como decisión fija del equipo para v2: máximo 10/20/30 ms. El quantum global v1 sigue solo para compatibilidad del código anterior.
 
 **Distinciones necesarias:** FIFO es orden de llegada; prioridad elige qué clase/proceso READY gana; FIFO desempata procesos iguales; Round Robin describe la rotación al reingresar después de un turno. El Scheduler compara `ordenLlegada`, pero el motor concurrente revisado no actualiza ese campo al agotar quantum. El motor es quien tendría que asignar el nuevo orden de READY según una regla que el equipo apruebe (DP-05); no corrijas código en tareas documentales.
 
@@ -32,7 +35,7 @@ Las notas listan una cuota por proceso en milisegundos (pág. 23). La fórmula `
 
 El contrato expresa el tiempo simulado en milisegundos. Los conceptos de tiempo simulado y demora visual son independientes. Como sugerencia de equipo, los documentos originales mencionan quantum de 500 ms y un paso visual de 800 ms reales; la unidad exacta de `siguientePaso()` sigue pendiente (DP-07). Velocidades visuales sugeridas por el equipo: `0.25x`, `0.5x`, `1x`, `2x` y `5x`; no son requisitos del profesor.
 
-Registrar eventos significativos como proceso creado/admitido, READY→RUN, fin de quantum, RUN→READY, RUN→WAIT, WAIT→READY, RUN→FINISH, cambio por aging y cancelación, cuando correspondan a la configuración aprobada. El reingreso RUN→READY después de quantum pertenece al comportamiento de motor/equipo y sus condiciones comunes siguen en DP-05/06/07; no se atribuye como flecha a la página 27 ni como estado del proceso previo en la página 28. Un bloque de timeline describe tiempo de CPU; el log conserva explicación textual. **DECISION_EQUIPO:** la GUI debe hacer visible el estado RUN aunque sea transitorio; el refresco presenta el snapshot sin avanzar el reloj simulado (cadencia pendiente DP-08). Comparar ambos motores con las mismas entradas y criterio de paso aprobado.
+Registrar eventos de admisión, despacho, reclasificación, cuota, WAIT/retorno, FINISH, CANCEL e idle conforme a v2; no hay evento de aging activo. RUN→READY por cuota es decisión de equipo para v2, no se atribuye a una flecha docente. La GUI reproduce RUN transitorio desde snapshots/eventos sin avanzar reloj. Timeline muestra CPU atribuido y hueco idle sin PID ficticio. Ambos motores se comparan con los mismos pasos y resultados observables.
 
 ## Requisitos visuales
 

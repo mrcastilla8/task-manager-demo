@@ -1,5 +1,9 @@
 # Workflow de desarrollo de ConcurrentSimulator
 
+> **Actualización Fase 0 (2026-10-15):** fase 0 quedó cerrada con DP-01–DP-11 aprobadas y encabezados candidatos en `contracts/v2/`. No se migran módulos en este cambio. La fase posterior se rige por [MIGRACION_CONTRATOS_V2.md](MIGRACION_CONTRATOS_V2.md): Castilla modelo/lista/memoria → Brickzon Scheduler; Aldana y Ángel en paralelo después de congelar contratos/Scheduler; Poma avanza en paralelo con mock tras congelar interfaz. Gates: G1 ratificar propuestas/API; G2 modelo; G3 Scheduler; G4 equivalencia de motores; G5 GUI/reproducción; G6 revisión integrada. El trabajo paralelo se mantiene. La matriz siguiente refleja el plan previo; quantum global y aging se refieren solo a v1/historial.
+
+Las descripciones detalladas heredadas más abajo preservan cómo se preparó la línea v1 y la auditoría de ramas. Cuando mencionan alternativas abiertas, aging operativo o quantum de 500 ms, se refieren a v1/antecedentes; el plan de migración v2 y el resultado de Fase 0 arriba tienen precedencia para el trabajo futuro.
+
 Este documento es la referencia del equipo para ordenar el trabajo desde la línea base actual hasta una aplicación integrada. Formaliza responsables, dependencias, actividades paralelas y gates; no aprueba decisiones funcionales pendientes ni convierte propuestas académicas en requisitos.
 
 ## Principios y estado de la línea base
@@ -14,11 +18,11 @@ Este documento es la referencia del equipo para ordenar el trabajo desde la lín
 
 | Fase | Responsable | Dependencias | Entregables | ¿Paralelizable? | Gate de integración |
 |---|---|---|---|---|---|
-| 0. Decisiones funcionales y contratos | Coordinación del equipo, con integrantes afectados | Evidencia académica, contratos v1.0, especificación y casos | Decisiones registradas y reglas/casos actualizados; migración versionada cuando afecte contratos | Sí. Cerrar pronto las reglas necesarias por un módulo; DP-08 y DP-11 se pueden discutir mientras empiezan módulos no bloqueados | Cada módulo identifica reglas aprobadas, cuestiones bloqueantes, contratos afectados y criterio verificable. No se implementan propuestas sin aprobación |
-| 1. Modelo, estructuras y memoria | Castilla (`castilla`) | Contratos; DP-09 antes de cambiar la estructura enlazada | Modelo, cola, memoria, validaciones y pruebas de modelo/cola/memoria | Trabajo de auditoría/completado puede arrancar en cuanto se inspeccione `master`; otras tareas independientes avanzan con contratos estables | Faltantes completados, altas/búsquedas/bajas/filtros y admisión/liberación verificadas; pruebas ejecutadas; integrado en la línea base acordada |
-| 2. Scheduler | Brickzon (`brickzon`) | Modelo estable; decisiones aplicables de DP-01/02/03/05/10 | `Scheduler`, configuración, selección READY, ordenamiento, desempates, aging aprobado y pruebas de prioridad/empate/aging | Preparación y auditoría pueden avanzar en paralelo con Fase 1; integración depende del modelo y de la política acordada | Selección determinista solo READY; casos de referencia y pruebas ejecutados; motores reutilizan este Scheduler; orden de reingreso lo actualiza el motor según DP-05 |
-| 3A. Motor lógico | Aldana (`aldana`) | Contratos, modelo, Scheduler y decisiones aplicables DP-04/05/06/07 | `SimulationEngine`, reloj, estados, quantum/cuota, WAIT, finalización, cancelación, eventos, timeline y cinco pruebas previstas | Sí, en paralelo con 3B una vez estables las reglas/contratos comunes; GUI puede avanzar con mock | Ejecución determinista; reloj, restante, WAIT, eventos y timeline coherentes; cinco pruebas ejecutadas; comparación con casos aprobados. La semántica exacta de `siguientePaso()` sigue bloqueada por DP-07 |
-| 3B. Motor concurrente | Ángel (`angel`) | Contratos, modelo, Scheduler y decisiones aplicables DP-04/05/06/07 | `ConcurrentEngine`, `ProcessThread`, coordinación, mutex/CV, pausa, cancelación, reinicio, cierre, snapshots y cinco pruebas concurrentes previstas | Sí, en paralelo con 3A cuando comparten reglas y contratos estables | CPU lógico único; sin espera activa, carreras, deadlocks ni workers huérfanos; pruebas de seguridad ejecutadas; resultados equivalentes a 3A según casos aprobados |
+| 0. Decisiones funcionales y contratos | Coordinación del equipo | Evidencia, v1.0, especificación y casos | Cerrada: DP-01–DP-11, casos y API v2 candidata | Cerrada en Fase 0 | Decisiones aprobadas; propuestas técnicas separadas; adopción API ratificada antes de migrar |
+| 1. Modelo, estructuras y memoria | Castilla (`castilla`) | API v2 ratificada | Modelo, validación, cuota derivada, lista simple, memoria y pruebas | Base de Scheduler; otros pueden preparar mock | API pública compatible; ownership/copia/move y límites validados; integrar por PR |
+| 2. Scheduler | Brickzon (`brickzon`) | Modelo v2 estable | Clasificación dinámica, selección READY prioridad/ticket/PID, Round Robin y pruebas (sin aging) | Auditoría paralela con fase 1; migración depende del modelo | Una regla común; vectores y fronteras aprobados; reingreso asigna ticket nuevo |
+| 3A. Motor lógico | Aldana (`aldana`) | Contrato y Scheduler v2 estables | Cuotas, reloj, eventos, WAIT/idle, paso, cancelación, timeline y pruebas | En paralelo con 3B; GUI puede avanzar con mock | Traza por paso determinista equivalente; sin wall-clock como reloj simulado |
+| 3B. Motor concurrente | Ángel (`angel`) | Contrato y Scheduler v2 estables | CPU lógico único, cuotas/tickets, workers, sincronización, cancelación, snapshots y pruebas | En paralelo con 3A | Seguridad de concurrencia y equivalencia observable con 3A |
 | 4. GUI y visualización | Poma (`poma`) | `IExecutionEngine` y `EstadoSistema`; DP-08/11 antes de finalizar GUI | Ventana, tabla, cola, CPU, temporizador, mapa conceptual de memoria, timeline, log, diálogo de alta y controles | Sí, puede iniciar desde fases 1–3 con mock/fixtures. Integración real primero con 3A, luego 3B | Vistas y controles trabajan contra la interfaz; actualización segura en hilo UI; snapshots coherentes; pruebas de integración/escenarios ejecutados; Qt y selección de motores ratificados si aplican |
 | 5. Integración y validación general | Todos; Poma coordina integración visual | Módulos con gates anteriores y dependencias disponibles en `master` o mecanismo de integración acordado | Integración de módulos, casos de referencia, comparación de motores, validación del sistema | Solo las correcciones independientes; secuencia de integración sigue modelo → Scheduler → motores → GUI | Build, pruebas aplicables, casos y comparación aprobados; sin conflictos ni contratos incompatibles. Crear un PR no satisface el gate |
 | 6. Demostración final | Todos | Fase 5 aprobada y decisiones efectivamente acordadas | Guion reproducible, datos de entrada y evidencia de ejecución | Preparación del guion puede ir en paralelo con integración; ejecución final depende de Fase 5 | Demostrar altas, prioridades, empate/rotación, llegada dinámica, memoria, WAIT/retorno, cancelación, turnos, timeline y ambos motores si siguen en alcance; sin resultados simulados o hardcodeados presentados como ejecución real |
@@ -86,6 +90,7 @@ El Scheduler selecciona READY y ordena la cola según política aprobada; no cre
 
 **Gate:** selección determinista y pruebas/casos de referencia ejecutados y revisados; dependencias contractuales disponibles en `master` o integración coordinada documentada.
 
+<a id="fase-3--motores-de-ejecucion"></a>
 ## Fase 3 — Motores de ejecución
 
 Los dos frentes comparten contratos, Scheduler, reloj lógico y semántica aprobada. Su desarrollo puede ser paralelo, pero deben converger en los mismos casos observables. La regla del proyecto es un solo CPU lógico, aunque el motor concurrente use varios hilos del sistema.
@@ -108,6 +113,7 @@ Comprobar expresamente orden de reingreso/Round Robin, aging, WAIT, cancelación
 
 **Gate:** pruebas concurrentes ejecutadas, terminación sin deadlocks/threads huérfanos, un único CPU lógico y equivalencia con el motor lógico en casos aprobados. La rama contiene archivos, pero no se afirma aquí ningún PASS.
 
+<a id="fase-4--gui-y-visualizacion"></a>
 ## Fase 4 — GUI y visualización
 
 Responsable: **Poma**, rama `poma`. GUI aún no aparecía implementada en las ramas inspeccionadas. Puede avanzar desde temprano con un mock y snapshots de `EstadoSistema`, sin esperar al fin de motores. Las rutas propuestas son `gui/MainWindow.*`, `ProcessTable.*`, `QueueWidget.*`, `CPUWidget.*`, `MemoryWidget.*`, `TimelineWidget.*`, `EventLogWidget.*`, `NewProcessDialog.*` y `main.cpp`; coordinar cualquier cambio de CMake fuera de esta documentación.
@@ -157,7 +163,7 @@ Cada PR de implementación informa responsable/módulo, issue si existe, requisi
 
 ## Decisiones que pueden bloquear trabajo
 
-El bloqueo se aplica solo a trabajo dependiente de la regla pendiente: DP-01/02/03 afecta clasificación de prioridad; DP-04/07 afecta intervalos y paso; DP-05 afecta FIFO/rotación; DP-06 afecta cancelación/transiciones; DP-09 afecta estructura de cola; DP-10 afecta prioridad dinámica/aging. DP-08 y DP-11 condicionan la finalización GUI. Consultar el registro para la evidencia y el conjunto completo de alternativas; no tomar una propuesta como norma. Lo independiente continúa con contratos estables y mocks.
+DP-01–DP-11 ya no bloquean por falta de decisión funcional. La migración espera ratificación de las propuestas técnicas/API v2 y sigue los gates G1–G6 de [MIGRACION_CONTRATOS_V2.md](MIGRACION_CONTRATOS_V2.md). El trabajo independiente avanza en paralelo con contratos estables y mocks.
 
 ## Fuentes y validación documental
 

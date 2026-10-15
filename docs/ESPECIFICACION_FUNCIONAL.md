@@ -1,5 +1,7 @@
 # Especificación funcional de ConcurrentSimulator
 
+> **Estado canónico desde Fase 0 (2026-10-15):** decisiones aprobadas DP-01–DP-11 gobiernan el destino contractual v2; el texto histórico más abajo conserva procedencia/estado anterior, y no reabre alternativas. v1.0 sigue vigente para el código existente. Véase [decisiones aprobadas](DECISIONES_APROBADAS.md), [contratos v2 candidatos](CONTRATOS_V2.md) y [matriz de migración](MIGRACION_CONTRATOS_V2.md). Prioridad 1–10, quantum global 500 ms y aging describen solo v1 congelada/antecedentes, no política activa v2. Los detalles no aprobados son propuestas técnicas separadas.
+
 Esta especificación consolida el comportamiento documentado del simulador y separa lo respaldado por las fuentes del docente de las decisiones existentes del equipo. Los contratos `contracts/*.h` y su [README](../contracts/README.md) describen la API vigente 1.0; esta especificación no los modifica ni convierte propuestas pendientes en una nueva API.
 
 ## Alcance y estado de la evidencia

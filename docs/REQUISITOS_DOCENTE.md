@@ -1,5 +1,7 @@
 # Requisitos del docente para ConcurrentSimulator
 
+> **Distinción (2026-10-15):** DP-01–DP-11 en [DECISIONES_APROBADAS.md](DECISIONES_APROBADAS.md) son acuerdos internos de coordinación para v2, no nueva evidencia ni obligaciones del profesor. Este archivo preserva únicamente fuentes y localizadores académicos; cuando el equipo adopta una decisión más específica, se etiqueta `DECISION_EQUIPO` y no se reescribe la fuente histórica.
+
 Este documento reúne solo las partes pertinentes de las notas de clase y la explicación del 1 de octubre de 2026. Los materiales originales no se incluyen en el repositorio. Las páginas y marcas de tiempo son localizadores de las copias proporcionadas para esta auditoría. La clasificación describe la evidencia disponible; una regla explícita puede dejar detalles de implementación pendientes.
 
 ## Fuentes consultadas
