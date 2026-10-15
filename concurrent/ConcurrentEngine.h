@@ -52,6 +52,10 @@ public:
     int memoriaUsada() const noexcept;
     int cantidadWorkersActivos() const;
 
+    // Solo pruebas: retardo fisico por rafaga dentro del worker (0 = desactivado).
+    // No modifica el tiempo simulado ni la cuota.
+    void configurarRetardoRafagaPruebasMs(int ms) noexcept;
+
 private:
     struct InfoIO {
         bool operacionRealizada{false};
@@ -73,6 +77,7 @@ private:
     std::condition_variable cvCoordinador_;
     std::condition_variable cvPasoCompletado_;
     bool pasoEnCurso_{false};
+    bool reiniciando_{false};
 
     ColaProcesos colaProcesos_;
     Memoria memoria_;
@@ -93,4 +98,5 @@ private:
     std::thread hiloCoordinador_;
     bool destruirCoordinador_{false};
     std::atomic<int> intervaloCoordinadorMs_{10};
+    std::atomic<int> retardoRafagaPruebasMs_{0};
 };

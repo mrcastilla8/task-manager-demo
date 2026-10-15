@@ -107,47 +107,73 @@ void ConcurrentEngine::iniciar() {
 
 void ConcurrentEngine::pausar() {
     std::unique_lock<std::mutex> lock(mutexEstado_);
-    if (estadoEjecucion_ == EstadoEjecucion::PAUSADO) {
-        return;
+    if (estadoEjecucion_ != EstadoEjecucion::PAUSADO) {
+        estadoEjecucion_ = EstadoEjecucion::PAUSADO;
     }
-    estadoEjecucion_ = EstadoEjecucion::PAUSADO;
+    // Punto consistente: no se retorna mientras haya una rafaga en curso.
     cvPasoCompletado_.wait(lock, [this]() {
         return !pasoEnCurso_;
     });
 }
 
 void ConcurrentEngine::reiniciar() {
+    std::unordered_map<int, std::unique_ptr<ProcessThread>> workersRetirados;
     {
         std::unique_lock<std::mutex> lock(mutexEstado_);
+        cvPasoCompletado_.wait(lock, [this]() {
+            return !reiniciando_;
+        });
+        reiniciando_ = true;
         estadoEjecucion_ = EstadoEjecucion::DETENIDO;
         cvPasoCompletado_.wait(lock, [this]() {
             return !pasoEnCurso_;
         });
+
+        // Todo el estado se limpia sin soltar el mutex: ningun paso puede
+        // arrancar (el coordinador respeta reiniciando_) ni usar workers
+        // que se estan retirando.
+        const int capacidad = memoria_.obtenerTotal();
+        workersRetirados.swap(workers_);
+        memoria_ = Memoria(capacidad);
+        colaProcesos_ = ColaProcesos{};
+        trackingIO_.clear();
+
+        tiempoSimulado_ = 0;
+        pidEjecutando_ = -1;
+        colaPrioridad_.clear();
+        eventos_.clear();
+        timeline_.clear();
+        estadoEjecucion_ = EstadoEjecucion::DETENIDO;
+        reiniciando_ = false;
     }
+    cvPasoCompletado_.notify_all();
+    cvCoordinador_.notify_all();
 
-    detenerTodosLosWorkersInterno();
-
-    std::lock_guard<std::mutex> lock(mutexEstado_);
-    const int capacidad = memoria_.obtenerTotal();
-    memoria_ = Memoria(capacidad);
-    colaProcesos_ = ColaProcesos{};
-    workers_.clear();
-    trackingIO_.clear();
-
-    tiempoSimulado_ = 0;
-    pidEjecutando_ = -1;
-    colaPrioridad_.clear();
-    eventos_.clear();
-    timeline_.clear();
-    estadoEjecucion_ = EstadoEjecucion::DETENIDO;
+    // El join de los workers se hace fuera del mutex de estado.
+    for (auto& par : workersRetirados) {
+        if (par.second != nullptr) {
+            par.second->solicitarDetencion();
+        }
+    }
 }
 
 void ConcurrentEngine::siguientePaso() {
     std::unique_lock<std::mutex> lock(mutexEstado_);
-    if (estadoEjecucion_ != EstadoEjecucion::PAUSADO) {
-        throw std::logic_error(
-            "siguientePaso requiere que el motor se encuentre en estado PAUSADO");
-    }
+    const auto exigirPausado = [this]() {
+        if (estadoEjecucion_ != EstadoEjecucion::PAUSADO) {
+            throw std::logic_error(
+                "siguientePaso requiere que el motor se encuentre en estado "
+                "PAUSADO");
+        }
+    };
+    exigirPausado();
+
+    // Una unica unidad logica a la vez: si otro hilo ejecuta un paso, se espera
+    // a que cierre y se vuelve a validar el estado (pudo cambiar mientras tanto).
+    cvPasoCompletado_.wait(lock, [this]() {
+        return !pasoEnCurso_;
+    });
+    exigirPausado();
 
     ejecutarPasoInterno(lock);
 }
@@ -183,6 +209,10 @@ EstadoSistema ConcurrentEngine::obtenerEstado() const {
     return snapshot;
 }
 
+void ConcurrentEngine::configurarRetardoRafagaPruebasMs(int ms) noexcept {
+    retardoRafagaPruebasMs_ = std::max(0, ms);
+}
+
 void ConcurrentEngine::configurarIntervaloCoordinadorMs(int ms) noexcept {
     intervaloCoordinadorMs_ = std::max(0, ms);
 }
@@ -215,18 +245,19 @@ int ConcurrentEngine::cantidadWorkersActivos() const {
 void ConcurrentEngine::loopCoordinador() {
     while (true) {
         std::unique_lock<std::mutex> lock(mutexEstado_);
+        // Solo se inicia una unidad si no hay otra en curso (por ejemplo un
+        // siguientePaso() de otro hilo) y no se esta reiniciando.
         cvCoordinador_.wait(lock, [this]() {
             return destruirCoordinador_ ||
-                   estadoEjecucion_ == EstadoEjecucion::EJECUTANDO;
+                   (estadoEjecucion_ == EstadoEjecucion::EJECUTANDO &&
+                    !pasoEnCurso_ && !reiniciando_);
         });
 
         if (destruirCoordinador_) {
             break;
         }
 
-        if (estadoEjecucion_ == EstadoEjecucion::EJECUTANDO) {
-            ejecutarPasoInterno(lock);
-        }
+        ejecutarPasoInterno(lock);
 
         const int esperaMs = intervaloCoordinadorMs_;
         if (esperaMs > 0 && estadoEjecucion_ == EstadoEjecucion::EJECUTANDO &&
@@ -240,15 +271,19 @@ void ConcurrentEngine::loopCoordinador() {
 void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
     struct GuardPaso {
         bool& flag;
-        std::condition_variable& cv;
-        GuardPaso(bool& f, std::condition_variable& c) : flag(f), cv(c) {
+        std::condition_variable& cvPaso;
+        std::condition_variable& cvCoord;
+        GuardPaso(bool& f, std::condition_variable& paso,
+                  std::condition_variable& coord)
+            : flag(f), cvPaso(paso), cvCoord(coord) {
             flag = true;
         }
         ~GuardPaso() {
             flag = false;
-            cv.notify_all();
+            cvPaso.notify_all();
+            cvCoord.notify_all();
         }
-    } guard(pasoEnCurso_, cvPasoCompletado_);
+    } guard(pasoEnCurso_, cvPasoCompletado_, cvCoordinador_);
 
     std::vector<Proceso> todos = colaProcesos_.obtenerTodos();
     if (todos.empty()) {
@@ -309,6 +344,7 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
     SolicitudTurno solicitud;
     solicitud.cuotaMs = quantumMs_;
     solicitud.tiempoRestante = proc->tiempoRestante;
+    solicitud.retardoRealMs = retardoRafagaPruebasMs_;
 
     auto& infoIO = trackingIO_[siguientePid];
     if (proc->operacionIO.habilitada && !infoIO.operacionRealizada) {

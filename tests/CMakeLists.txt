@@ -30,4 +30,5 @@ add_simulator_test(test_concurrent_cancel)
 add_simulator_test(test_concurrent_thread_shutdown)
 add_simulator_test(test_concurrent_race_safety)
 add_simulator_test(test_concurrent_scenarios)
+add_simulator_test(test_concurrent_step_exclusion)
 

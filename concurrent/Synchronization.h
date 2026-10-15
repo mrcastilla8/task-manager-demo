@@ -32,6 +32,10 @@ struct SolicitudTurno {
     std::int64_t tiempoRestante{0};
     bool tieneIO{false};
     std::int64_t cpuRestanteParaIO{0};
+    // Solo pruebas: duerme fisicamente dentro del worker, de forma interrumpible,
+    // para ensanchar la ventana en que la rafaga esta en curso. No altera el
+    // tiempo simulado.
+    std::int64_t retardoRealMs{0};
 };
 
 struct ResultadoRafaga {
