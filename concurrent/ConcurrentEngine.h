@@ -98,8 +98,11 @@ private:
     std::vector<Evento> eventos_;
     std::vector<BloqueTimeline> timeline_;
 
-    std::thread hiloCoordinador_;
     bool destruirCoordinador_{false};
     std::atomic<int> intervaloCoordinadorMs_{10};
     std::atomic<int> retardoRafagaPruebasMs_{0};
+
+    // Debe ser el ultimo miembro: el hilo arranca al construirlo y lee los
+    // demas miembros, que deben estar inicializados antes.
+    std::thread hiloCoordinador_;
 };
