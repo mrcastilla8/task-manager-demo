@@ -70,3 +70,13 @@ add_executable(test_concurrent_v2_equivalencia test_concurrent_v2_equivalencia.c
 target_link_libraries(test_concurrent_v2_equivalencia PRIVATE simulator_concurrent_v2)
 configure_simulator_test(test_concurrent_v2_equivalencia)
 add_test(NAME test_concurrent_v2_equivalencia COMMAND test_concurrent_v2_equivalencia)
+
+add_executable(test_engine_session test_engine_session.cpp)
+target_link_libraries(test_engine_session PRIVATE simulator_engine_session)
+configure_simulator_test(test_engine_session)
+add_test(NAME test_engine_session COMMAND test_engine_session)
+
+add_executable(test_gui_presentation ../gui/test_presentation.cpp
+    ../gui/Presentation.cpp ../gui/PreviewFrames.cpp)
+target_include_directories(test_gui_presentation PRIVATE ${PROJECT_SOURCE_DIR})
+add_test(NAME test_gui_presentation COMMAND test_gui_presentation)

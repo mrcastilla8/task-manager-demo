@@ -10,6 +10,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(SIMULATOR_WARNINGS_AS_ERRORS
        "Tratar las advertencias del compilador como errores" ON)
+option(SIMULATOR_BUILD_GUI_PREVIEW
+       "Construir frontend Qt 6 con motores v2" OFF)
 
 add_library(simulator_core
     core/ColaProcesos.cpp
@@ -48,17 +50,23 @@ add_library(simulator_concurrent_v2
 target_include_directories(simulator_concurrent_v2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(simulator_concurrent_v2 PUBLIC simulator_simulation Threads::Threads)
 
+add_library(simulator_engine_session gui/EngineSession.cpp)
+target_include_directories(simulator_engine_session PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(simulator_engine_session PUBLIC simulator_concurrent_v2)
+
 
 if(MSVC)
     target_compile_options(simulator_core PRIVATE /W4 /permissive-)
     target_compile_options(simulator_scheduler PRIVATE /W4 /permissive-)
     target_compile_options(simulator_simulation PRIVATE /W4 /permissive-)
     target_compile_options(simulator_concurrent_v2 PRIVATE /W4 /permissive-)
+    target_compile_options(simulator_engine_session PRIVATE /W4 /permissive-)
     if(SIMULATOR_WARNINGS_AS_ERRORS)
         target_compile_options(simulator_core PRIVATE /WX)
         target_compile_options(simulator_scheduler PRIVATE /WX)
         target_compile_options(simulator_simulation PRIVATE /WX)
         target_compile_options(simulator_concurrent_v2 PRIVATE /WX)
+        target_compile_options(simulator_engine_session PRIVATE /WX)
     endif()
     target_compile_options(simulator_core_v2 PRIVATE /W4 /permissive-)
     if(SIMULATOR_WARNINGS_AS_ERRORS)
@@ -69,11 +77,13 @@ else()
     target_compile_options(simulator_scheduler PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(simulator_simulation PRIVATE -Wall -Wextra -Wpedantic)
     target_compile_options(simulator_concurrent_v2 PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(simulator_engine_session PRIVATE -Wall -Wextra -Wpedantic)
     if(SIMULATOR_WARNINGS_AS_ERRORS)
         target_compile_options(simulator_core PRIVATE -Werror)
         target_compile_options(simulator_scheduler PRIVATE -Werror)
         target_compile_options(simulator_simulation PRIVATE -Werror)
         target_compile_options(simulator_concurrent_v2 PRIVATE -Werror)
+        target_compile_options(simulator_engine_session PRIVATE -Werror)
     endif()
     target_compile_options(simulator_core_v2 PRIVATE -Wall -Wextra -Wpedantic)
     if(SIMULATOR_WARNINGS_AS_ERRORS)
@@ -85,5 +95,9 @@ include(CTest)
 
 if(BUILD_TESTING)
     add_subdirectory(tests)
+endif()
+
+if(SIMULATOR_BUILD_GUI_PREVIEW)
+    add_subdirectory(gui)
 endif()
 
