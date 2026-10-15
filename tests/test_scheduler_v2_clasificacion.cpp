@@ -118,5 +118,81 @@ int main() {
         EXPECT_EQ(Scheduler::evaluarPrioridad(limiteMax - 1, 0, limiteMax), Prioridad::P3);
     }
 
+    // Caso 8: Validacion estricta de entradas invalidas sin fallbacks silenciosos (DP-03)
+    {
+        // Tamanos negativos
+        EXPECT_THROW(Scheduler::evaluarPrioridad(-1, 10, 20), std::invalid_argument);
+        EXPECT_THROW(Scheduler::evaluarPrioridad(15, -1, 20), std::invalid_argument);
+        EXPECT_THROW(Scheduler::evaluarPrioridad(15, 10, -1), std::invalid_argument);
+
+        // minA > maxB no debe intercambiarse silenciosamente
+        EXPECT_THROW(Scheduler::evaluarPrioridad(15, 30, 20), std::invalid_argument);
+
+        // tamanioBytes fuera del intervalo [minA, maxB]
+        EXPECT_THROW(Scheduler::evaluarPrioridad(5, 10, 20), std::invalid_argument);
+        EXPECT_THROW(Scheduler::evaluarPrioridad(25, 10, 20), std::invalid_argument);
+
+        // Proceso activo en TL con tamano negativo detectado en clasificarPrioridades
+        std::vector<Proceso> invalidos = {
+            crearProcesoV2(1, "Negativo", -10, Prioridad::P1, 1, Estado::READY),
+        };
+        EXPECT_THROW(scheduler.clasificarPrioridades(invalidos), std::invalid_argument);
+    }
+
+    // Caso 9: Admision rechazada no altera TL ni prioridades existentes (DP-02c)
+    {
+        std::vector<Proceso> procesos = {
+            crearProcesoV2(1, "P1", 12, Prioridad::P3, 1, Estado::READY),
+            crearProcesoV2(2, "P2", 40, Prioridad::P3, 2, Estado::READY),
+            crearProcesoV2(3, "P3", 96, Prioridad::P3, 3, Estado::READY),
+        };
+
+        scheduler.clasificarPrioridades(procesos);
+        EXPECT_EQ(procesos[0].prioridad, Prioridad::P1);
+        EXPECT_EQ(procesos[1].prioridad, Prioridad::P2);
+        EXPECT_EQ(procesos[2].prioridad, Prioridad::P3);
+
+        // Si una admision es rechazada por memoria, el nuevo proceso NO se inserta en TL
+        // El estado y prioridades de los procesos activos deben mantenerse exactamente iguales
+        scheduler.clasificarPrioridades(procesos);
+        EXPECT_EQ(procesos[0].prioridad, Prioridad::P1);
+        EXPECT_EQ(procesos[1].prioridad, Prioridad::P2);
+        EXPECT_EQ(procesos[2].prioridad, Prioridad::P3);
+    }
+
+    // Caso 10: Disparadores de recalculo (DP-02b: Admision exitosa, FINISH y CANCEL)
+    {
+        // Estado base: dos procesos
+        std::vector<Proceso> procesos = {
+            crearProcesoV2(1, "P1", 10, Prioridad::P1, 1, Estado::READY),
+            crearProcesoV2(2, "P2", 20, Prioridad::P1, 2, Estado::READY),
+        };
+        scheduler.clasificarPrioridades(procesos);
+        EXPECT_EQ(procesos[0].prioridad, Prioridad::P1);
+        EXPECT_EQ(procesos[1].prioridad, Prioridad::P3); // A=10, B=20 -> P2 es el mayor (P3)
+
+        // Disparador 1: Admision exitosa de un proceso mayor (tamanio 100)
+        procesos.push_back(crearProcesoV2(3, "P3", 100, Prioridad::P1, 3, Estado::READY));
+        scheduler.clasificarPrioridades(procesos);
+        // Ahora A=10, B=100 (D=90). P1(10) es P1, P2(20) pasa a ser P1 (3*(20-10)=30 < 90), P3(100) es P3
+        EXPECT_EQ(procesos[0].prioridad, Prioridad::P1);
+        EXPECT_EQ(procesos[1].prioridad, Prioridad::P1);
+        EXPECT_EQ(procesos[2].prioridad, Prioridad::P3);
+
+        // Disparador 2: Finalizacion de P3 (pasa a FINISH)
+        procesos[2].estado = Estado::FINISH;
+        scheduler.clasificarPrioridades(procesos);
+        // P3 sale de TL, TL vuelve a {P1(10), P2(20)}. P2 vuelve a P3. P3 conserva su prioridad.
+        EXPECT_EQ(procesos[0].prioridad, Prioridad::P1);
+        EXPECT_EQ(procesos[1].prioridad, Prioridad::P3);
+        EXPECT_EQ(procesos[2].prioridad, Prioridad::P3);
+
+        // Disparador 3: Cancelacion de P2 (pasa a CANCEL)
+        procesos[1].estado = Estado::CANCEL;
+        scheduler.clasificarPrioridades(procesos);
+        // TL solo tiene P1(10). Como A=B=10, DP-03 exige P3
+        EXPECT_EQ(procesos[0].prioridad, Prioridad::P3);
+    }
+
     return test::finish();
 }

@@ -7,6 +7,7 @@ namespace ConcurrentSimulator::v2 {
 class SimulationClockV2 {
 public:
     std::int64_t ahoraMs() const noexcept;
+    bool puedeAvanzar(std::int64_t duracionMs) const noexcept;
     void avanzar(std::int64_t duracionMs) noexcept;
     void reiniciar() noexcept;
 

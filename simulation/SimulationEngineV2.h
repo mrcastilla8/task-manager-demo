@@ -31,7 +31,8 @@ private:
     const Proceso* buscarProceso(int pid) const noexcept;
     void reclasificar();
     void registrar(TipoEvento tipo, int pid = -1, std::int64_t duracionMs = 0);
-    bool asignarTicket(Proceso& proceso) noexcept;
+    bool asignarTicket(Proceso& proceso);
+    bool despertarEsperasVencidas();
     void liberarMemoria(const Proceso& proceso) noexcept;
     bool hayActivo() const noexcept;
     void finalizarSiCorresponde();

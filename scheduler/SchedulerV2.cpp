@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <climits>
+#include <stdexcept>
 
 namespace ConcurrentSimulator::v2 {
 
@@ -15,9 +16,15 @@ inline bool perteneceATL(Estado estado) noexcept {
 
 Prioridad Scheduler::evaluarPrioridad(std::int64_t tamanioBytes,
                                      std::int64_t minA,
-                                     std::int64_t maxB) noexcept {
+                                     std::int64_t maxB) {
+    if (tamanioBytes < 0 || minA < 0 || maxB < 0) {
+        throw std::invalid_argument("Scheduler::evaluarPrioridad: los tamanos no pueden ser negativos");
+    }
     if (minA > maxB) {
-        std::swap(minA, maxB);
+        throw std::invalid_argument("Scheduler::evaluarPrioridad: minA no puede ser mayor que maxB");
+    }
+    if (tamanioBytes < minA || tamanioBytes > maxB) {
+        throw std::invalid_argument("Scheduler::evaluarPrioridad: tamanioBytes fuera del intervalo [minA, maxB]");
     }
 
     if (minA == maxB) {
@@ -30,12 +37,6 @@ Prioridad Scheduler::evaluarPrioridad(std::int64_t tamanioBytes,
     }
 
     const std::int64_t diff = tamanioBytes - minA;
-    if (diff < 0) {
-        return Prioridad::P1;
-    }
-    if (diff >= D) {
-        return Prioridad::P3;
-    }
 
     // Evaluacion exacta y libre de overflow de: 3 * diff < D
     constexpr std::int64_t limiteTercio = INT64_MAX / 3;
@@ -71,13 +72,16 @@ Prioridad Scheduler::evaluarPrioridad(std::int64_t tamanioBytes,
     return Prioridad::P3;
 }
 
-void Scheduler::clasificarPrioridades(std::vector<Proceso>& procesos) const noexcept {
+void Scheduler::clasificarPrioridades(std::vector<Proceso>& procesos) const {
     std::int64_t minA = INT64_MAX;
     std::int64_t maxB = INT64_MIN;
     bool hayTL = false;
 
     for (const auto& proc : procesos) {
         if (perteneceATL(proc.estado)) {
+            if (proc.tamanioBytes < 0) {
+                throw std::invalid_argument("Scheduler::clasificarPrioridades: proceso en TL con tamanio negativo");
+            }
             minA = std::min(minA, proc.tamanioBytes);
             maxB = std::max(maxB, proc.tamanioBytes);
             hayTL = true;

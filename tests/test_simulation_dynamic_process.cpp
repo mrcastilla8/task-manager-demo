@@ -14,7 +14,9 @@ int main() {
     EXPECT_TRUE(motor.iniciar());
     EXPECT_TRUE(motor.pausar());
     EXPECT_EQ(motor.obtenerEstado().colaReady[0], 1);
+    const std::uint64_t ticketInicial = motor.obtenerEstado().procesos[0].ticketReady;
     EXPECT_EQ(motor.siguientePaso().tiempoAvanzadoMs, 30);
     EXPECT_EQ(motor.obtenerEstado().procesos[0].tiempoCpuRestanteMs, 10);
+    EXPECT_TRUE(motor.obtenerEstado().procesos[0].ticketReady > ticketInicial);
     return test::finish();
 }

@@ -16,5 +16,11 @@ int main() {
     EXPECT_EQ(estado.estadoEjecucion, EstadoEjecucion::FINALIZADO);
     EXPECT_EQ(estado.timeline[0].inicioMs(), 0);
     EXPECT_EQ(estado.timeline[0].finMs(), 7);
+    EXPECT_TRUE(motor.agregarProceso({2, "nuevo", 40, 4, {}}));
+    EXPECT_EQ(motor.obtenerEstado().estadoEjecucion, EstadoEjecucion::DETENIDO);
+    EXPECT_TRUE(motor.iniciar());
+    EXPECT_TRUE(motor.pausar());
+    EXPECT_EQ(motor.siguientePaso().tiempoAvanzadoMs, 4);
+    EXPECT_EQ(motor.obtenerEstado().procesos[1].estado, Estado::FINISH);
     return test::finish();
 }

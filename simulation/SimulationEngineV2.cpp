@@ -1,6 +1,7 @@
 #include "simulation/SimulationEngineV2.h"
 
 #include <algorithm>
+#include <limits>
 #include <utility>
 
 namespace ConcurrentSimulator::v2 {
@@ -33,6 +34,9 @@ Resultado SimulationEngineV2::agregarProceso(const AltaProceso& alta) {
     }
     memoriaUsadaBytes_ += alta.tamanioBytes;
     procesos_.push_back(std::move(proceso));
+    if (estado_ == EstadoEjecucion::FINALIZADO) {
+        estado_ = EstadoEjecucion::DETENIDO;
+    }
     registrar(TipoEvento::PROCESO_CREADO, alta.pid);
     registrar(TipoEvento::PROCESO_ADMITIDO, alta.pid);
     reclasificar();
@@ -51,7 +55,8 @@ Resultado SimulationEngineV2::cancelarProceso(int pid) {
         return {CodigoResultado::PID_YA_CANCELADO, pid};
     }
 
-    // Un RUN no puede observarse externamente: siguientePaso es síncrono.
+    // Un RUN no puede cancelarse por la API: siguientePaso es síncrono y solo
+    // retorna tras transitarlo a READY, WAIT o FINISH; no hay hilos en este motor.
     proceso->estado = Estado::CANCEL;
     esperas_.erase(std::remove_if(esperas_.begin(), esperas_.end(),
                                   [pid](const Espera& espera) { return espera.pid == pid; }),
@@ -67,6 +72,7 @@ Resultado SimulationEngineV2::iniciar() {
     if (estado_ == EstadoEjecucion::FINALIZADO) {
         return {CodigoResultado::ESTADO_INVALIDO, -1};
     }
+    // La ejecucion continua corresponde al driver; esta operacion no despacha ni bloquea.
     estado_ = EstadoEjecucion::EJECUTANDO;
     return {CodigoResultado::OK, -1};
 }
@@ -100,6 +106,9 @@ ResultadoPaso SimulationEngineV2::siguientePaso() {
         return {CodigoResultado::ESTADO_INVALIDO, false, false, 0};
     }
 
+    if (!despertarEsperasVencidas()) {
+        return {CodigoResultado::ARGUMENTO_INVALIDO, false, false, 0};
+    }
     reclasificar();
     const int pid = scheduler_.seleccionarSiguiente(procesos_);
     if (pid < 0) {
@@ -114,37 +123,23 @@ ResultadoPaso SimulationEngineV2::siguientePaso() {
         }
         const std::int64_t inicio = reloj_.ahoraMs();
         if (despertar > inicio) {
+            if (!reloj_.puedeAvanzar(despertar - inicio)) {
+                return {CodigoResultado::ARGUMENTO_INVALIDO, false, false, 0};
+            }
             registrar(TipoEvento::CPU_IDLE_INICIO);
             reloj_.avanzar(despertar - inicio);
             registrar(TipoEvento::CPU_IDLE_FIN);
         }
-        for (auto& espera : esperas_) {
-            if (espera.despertarMs <= reloj_.ahoraMs()) {
-                Proceso* proceso = buscarProceso(espera.pid);
-                if (proceso != nullptr && proceso->estado == Estado::WAIT) {
-                    proceso->estado = Estado::READY;
-                    asignarTicket(*proceso);
-                    registrar(TipoEvento::WAIT_A_READY, proceso->pid);
-                }
-            }
+        if (!despertarEsperasVencidas()) {
+            return {CodigoResultado::ARGUMENTO_INVALIDO, false, false, 0};
         }
-        esperas_.erase(std::remove_if(esperas_.begin(), esperas_.end(),
-                                      [this](const Espera& espera) {
-                                          return espera.despertarMs <= reloj_.ahoraMs();
-                                      }),
-                       esperas_.end());
         reclasificar();
         return {CodigoResultado::OK, true, false, reloj_.ahoraMs() - inicio};
     }
 
     Proceso* proceso = buscarProceso(pid);
-    proceso->estado = Estado::RUN;
-    pidEjecutando_ = pid;
-    cuotaTurnoFijadaMs_ = cuotaMs(proceso->prioridad);
-    cpuConsumidaTurnoMs_ = 0;
-    registrar(TipoEvento::READY_A_RUN, pid);
-
-    std::int64_t duracion = std::min(cuotaTurnoFijadaMs_, proceso->tiempoCpuRestanteMs);
+    const std::int64_t cuota = cuotaMs(proceso->prioridad);
+    std::int64_t duracion = std::min(cuota, proceso->tiempoCpuRestanteMs);
     const bool ioPendiente = proceso->operacionIO.habilitada &&
                              std::find(procesosConIOConsumida_.begin(),
                                        procesosConIOConsumida_.end(), pid) ==
@@ -155,17 +150,48 @@ ResultadoPaso SimulationEngineV2::siguientePaso() {
     }
 
     const std::int64_t inicio = reloj_.ahoraMs();
-    reloj_.avanzar(duracion);
-    proceso->tiempoCpuRestanteMs -= duracion;
-    proceso->tiempoCpuConsumidoMs += duracion;
-    cpuConsumidaTurnoMs_ = duracion;
-    for (auto& otro : procesos_) {
-        if (otro.estado == Estado::READY && otro.pid != pid) {
-            otro.tiempoEsperaMs += duracion;
+    if (duracion <= 0 || !reloj_.puedeAvanzar(duracion) ||
+        (ioPendiente && duracion == proceso->operacionIO.despuesDeCpuMs -
+                                         proceso->tiempoCpuConsumidoMs &&
+         proceso->operacionIO.duracionEsperaMs >
+             std::numeric_limits<std::int64_t>::max() - (inicio + duracion))) {
+        return {CodigoResultado::ARGUMENTO_INVALIDO, false, false, 0};
+    }
+
+    proceso->estado = Estado::RUN;
+    pidEjecutando_ = pid;
+    cuotaTurnoFijadaMs_ = cuota;
+    cpuConsumidaTurnoMs_ = 0;
+    registrar(TipoEvento::READY_A_RUN, pid);
+
+    std::int64_t pendiente = duracion;
+    while (pendiente > 0) {
+        std::int64_t segmento = pendiente;
+        for (const auto& espera : esperas_) {
+            if (espera.despertarMs > reloj_.ahoraMs()) {
+                segmento = std::min(segmento, espera.despertarMs - reloj_.ahoraMs());
+            }
+        }
+
+        if (segmento <= 0 || !reloj_.puedeAvanzar(segmento)) {
+            return {CodigoResultado::ARGUMENTO_INVALIDO, false, false, 0};
+        }
+        reloj_.avanzar(segmento);
+        proceso->tiempoCpuRestanteMs -= segmento;
+        proceso->tiempoCpuConsumidoMs += segmento;
+        cpuConsumidaTurnoMs_ += segmento;
+        pendiente -= segmento;
+        for (auto& otro : procesos_) {
+            if (otro.estado == Estado::READY && otro.pid != pid) {
+                otro.tiempoEsperaMs += segmento;
+            }
+        }
+        registrar(TipoEvento::CPU_EJECUTADA, pid, segmento);
+        if (!despertarEsperasVencidas()) {
+            return {CodigoResultado::ARGUMENTO_INVALIDO, false, false, 0};
         }
     }
     timeline_.emplace_back(pid, inicio, reloj_.ahoraMs());
-    registrar(TipoEvento::CPU_EJECUTADA, pid, duracion);
 
     if (proceso->tiempoCpuRestanteMs == 0) {
         proceso->estado = Estado::FINISH;
@@ -179,8 +205,10 @@ ResultadoPaso SimulationEngineV2::siguientePaso() {
         registrar(TipoEvento::RUN_A_WAIT, pid);
         reclasificar();
     } else {
+        if (!asignarTicket(*proceso)) {
+            return {CodigoResultado::ARGUMENTO_INVALIDO, false, false, 0};
+        }
         proceso->estado = Estado::READY;
-        asignarTicket(*proceso);
         registrar(TipoEvento::CUOTA_AGOTADA, pid);
         registrar(TipoEvento::RUN_A_READY, pid);
         reclasificar();
@@ -244,11 +272,56 @@ void SimulationEngineV2::registrar(TipoEvento tipo, int pid, std::int64_t duraci
     eventos_.push_back({reloj_.ahoraMs(), tipo, pid, duracionMs, {}});
 }
 
-bool SimulationEngineV2::asignarTicket(Proceso& proceso) noexcept {
-    if (siguienteTicket_ == 0) {
+bool SimulationEngineV2::asignarTicket(Proceso& proceso) {
+    if (siguienteTicket_ == 0 ||
+        siguienteTicket_ == std::numeric_limits<std::uint64_t>::max()) {
+        std::vector<Proceso*> listos;
+        listos.reserve(procesos_.size());
+        for (auto& candidato : procesos_) {
+            if (candidato.estado == Estado::READY) {
+                listos.push_back(&candidato);
+            }
+        }
+        std::sort(listos.begin(), listos.end(), [](const Proceso* a, const Proceso* b) {
+            return a->ticketReady != b->ticketReady ? a->ticketReady < b->ticketReady
+                                                     : a->pid < b->pid;
+        });
+        for (std::size_t indice = 0; indice < listos.size(); ++indice) {
+            if (indice >= std::numeric_limits<std::uint64_t>::max() - 1) {
+                return false;
+            }
+            listos[indice]->ticketReady = static_cast<std::uint64_t>(indice) + 1;
+        }
+        siguienteTicket_ = static_cast<std::uint64_t>(listos.size()) + 1;
+    }
+    if (siguienteTicket_ == 0 ||
+        siguienteTicket_ == std::numeric_limits<std::uint64_t>::max()) {
         return false;
     }
-    proceso.ticketReady = siguienteTicket_++;
+    proceso.ticketReady = siguienteTicket_;
+    ++siguienteTicket_;
+    return true;
+}
+
+bool SimulationEngineV2::despertarEsperasVencidas() {
+    for (auto& espera : esperas_) {
+        if (espera.despertarMs > reloj_.ahoraMs()) {
+            continue;
+        }
+        Proceso* proceso = buscarProceso(espera.pid);
+        if (proceso != nullptr && proceso->estado == Estado::WAIT) {
+            if (!asignarTicket(*proceso)) {
+                return false;
+            }
+            proceso->estado = Estado::READY;
+            registrar(TipoEvento::WAIT_A_READY, proceso->pid);
+        }
+    }
+    esperas_.erase(std::remove_if(esperas_.begin(), esperas_.end(),
+                                  [this](const Espera& espera) {
+                                      return espera.despertarMs <= reloj_.ahoraMs();
+                                  }),
+                   esperas_.end());
     return true;
 }
 

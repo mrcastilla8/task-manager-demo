@@ -37,10 +37,12 @@ public:
      * - En otro caso: P3.
      *
      * Implementacion exacta en int64_t con prevencion estricta de desbordamiento (overflow).
+     * Lanza std::invalid_argument si las entradas son invalidas (tamanos negativos, minA > maxB
+     * o tamanioBytes fuera del intervalo [minA, maxB]).
      */
     static Prioridad evaluarPrioridad(std::int64_t tamanioBytes,
                                       std::int64_t minA,
-                                      std::int64_t maxB) noexcept;
+                                      std::int64_t maxB);
 
     /**
      * @brief Recalcula y actualiza in-place las prioridades de los procesos activos
@@ -48,10 +50,12 @@ public:
      *
      * Procesos en estado FINISH o CANCEL se excluyen del calculo de extremos (min/max)
      * y su prioridad no se muta (DP-02a). Si TL esta vacia, no realiza cambios.
+     * Admisiones rechazadas no alteran TL ni las prioridades existentes (DP-02c).
      *
      * @param procesos Vector de procesos del sistema a reclasificar.
+     * @throws std::invalid_argument si algun proceso activo en TL tiene tamano negativo.
      */
-    void clasificarPrioridades(std::vector<Proceso>& procesos) const noexcept;
+    void clasificarPrioridades(std::vector<Proceso>& procesos) const;
 
     /**
      * @brief Selecciona el PID del proceso en estado READY que debe recibir CPU logico.
