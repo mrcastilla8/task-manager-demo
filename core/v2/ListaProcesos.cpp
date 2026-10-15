@@ -183,7 +183,15 @@ bool ListaProcesos::actualizarPrioridad(int pid,
 bool ListaProcesos::actualizarCpu(int pid, std::int64_t consumidoMs,
                                   std::int64_t restanteMs) noexcept {
     Nodo* nodo = buscarNodo(pid);
-    if (nodo == nullptr || consumidoMs < 0 || restanteMs < 0 ||
+    if (nodo == nullptr) {
+        return false;
+    }
+    if (consumidoMs == nodo->proceso.tiempoCpuConsumidoMs &&
+        restanteMs == nodo->proceso.tiempoCpuRestanteMs) {
+        return true;
+    }
+    if (nodo->proceso.estado != Estado::RUN || consumidoMs < 0 ||
+        restanteMs < 0 ||
         consumidoMs > nodo->proceso.tiempoCpuTotalMs ||
         restanteMs != nodo->proceso.tiempoCpuTotalMs - consumidoMs ||
         consumidoMs < nodo->proceso.tiempoCpuConsumidoMs ||

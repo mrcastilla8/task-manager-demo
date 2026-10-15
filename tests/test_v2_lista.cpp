@@ -16,6 +16,22 @@ Proceso proceso(int pid, Estado estado = Estado::READY) {
     result.estado = estado;
     return result;
 }
+
+void verificarProcesoSinCambios(const Proceso* actual,
+                                const Proceso& esperado) {
+    EXPECT_TRUE(actual != nullptr);
+    if (actual == nullptr) {
+        return;
+    }
+    EXPECT_EQ(actual->pid, esperado.pid);
+    EXPECT_EQ(actual->estado, esperado.estado);
+    EXPECT_EQ(actual->prioridad, esperado.prioridad);
+    EXPECT_EQ(actual->tiempoCpuTotalMs, esperado.tiempoCpuTotalMs);
+    EXPECT_EQ(actual->tiempoCpuConsumidoMs, esperado.tiempoCpuConsumidoMs);
+    EXPECT_EQ(actual->tiempoCpuRestanteMs, esperado.tiempoCpuRestanteMs);
+    EXPECT_EQ(actual->tiempoEsperaMs, esperado.tiempoEsperaMs);
+    EXPECT_EQ(actual->ticketReady, esperado.ticketReady);
+}
 }  // namespace
 
 int main() {
@@ -120,6 +136,60 @@ int main() {
     EXPECT_TRUE(lista.actualizarTicketReady(2, 42)); // misma asignación
     EXPECT_TRUE(lista.actualizarTicketReady(2, 43));
     EXPECT_EQ(lista.buscar(2)->ticketReady, 43U);
+
+    // H-09: solo RUN admite progreso CPU; una repetición exacta es inocua.
+    ListaProcesos cpuPorEstado;
+    Proceso readyCpu = proceso(30);
+    Proceso waitCpu = proceso(31, Estado::WAIT);
+    Proceso cancelCpu = proceso(32);
+    Proceso finishCpu = proceso(33, Estado::FINISH);
+    finishCpu.tiempoCpuConsumidoMs = 50;
+    finishCpu.tiempoCpuRestanteMs = 50;
+    Proceso runCpu = proceso(34);
+    EXPECT_TRUE(cpuPorEstado.agregar(readyCpu));
+    EXPECT_TRUE(cpuPorEstado.agregar(waitCpu));
+    EXPECT_TRUE(cpuPorEstado.agregar(cancelCpu));
+    EXPECT_TRUE(cpuPorEstado.agregar(finishCpu));
+    EXPECT_TRUE(cpuPorEstado.agregar(runCpu));
+    EXPECT_TRUE(cpuPorEstado.actualizarEstado(32, Estado::RUN));
+    EXPECT_TRUE(cpuPorEstado.actualizarCpu(32, 10, 90));
+    EXPECT_TRUE(cpuPorEstado.actualizarEstado(32, Estado::CANCEL));
+    EXPECT_TRUE(cpuPorEstado.actualizarEstado(34, Estado::RUN));
+
+    auto rechazarSinMutar = [&](int pid, std::int64_t consumido,
+                                std::int64_t restante) {
+        const Proceso antes = *cpuPorEstado.buscar(pid);
+        EXPECT_FALSE(cpuPorEstado.actualizarCpu(pid, consumido, restante));
+        verificarProcesoSinCambios(cpuPorEstado.buscar(pid), antes);
+    };
+    auto aceptarIdempotente = [&](int pid) {
+        const Proceso antes = *cpuPorEstado.buscar(pid);
+        EXPECT_TRUE(cpuPorEstado.actualizarCpu(
+            pid, antes.tiempoCpuConsumidoMs, antes.tiempoCpuRestanteMs));
+        verificarProcesoSinCambios(cpuPorEstado.buscar(pid), antes);
+    };
+    aceptarIdempotente(30);  // READY
+    aceptarIdempotente(31);  // WAIT
+    aceptarIdempotente(32);  // CANCEL
+    aceptarIdempotente(33);  // FINISH
+    rechazarSinMutar(30, 10, 90);  // READY
+    rechazarSinMutar(31, 10, 90);  // WAIT
+    rechazarSinMutar(32, 20, 80);  // CANCEL
+    rechazarSinMutar(33, 60, 40);  // FINISH
+
+    Proceso antesRun = *cpuPorEstado.buscar(34);
+    EXPECT_TRUE(cpuPorEstado.actualizarCpu(34, 0, 100));  // idempotente en RUN
+    verificarProcesoSinCambios(cpuPorEstado.buscar(34), antesRun);
+    EXPECT_TRUE(cpuPorEstado.actualizarCpu(34, 10, 90));
+    EXPECT_TRUE(cpuPorEstado.actualizarCpu(34, 10, 90));  // idempotente
+    const Proceso runAvanzado = *cpuPorEstado.buscar(34);
+    EXPECT_FALSE(cpuPorEstado.actualizarCpu(34, 9, 91));  // retroceso
+    verificarProcesoSinCambios(cpuPorEstado.buscar(34), runAvanzado);
+    EXPECT_TRUE(cpuPorEstado.actualizarCpu(34, 100, 0));  // agotamiento exacto
+    EXPECT_TRUE(cpuPorEstado.actualizarEstado(34, Estado::FINISH));
+    const Proceso finishAgotado = *cpuPorEstado.buscar(34);
+    EXPECT_TRUE(cpuPorEstado.actualizarCpu(34, 100, 0));  // idempotente terminal
+    verificarProcesoSinCambios(cpuPorEstado.buscar(34), finishAgotado);
 
     EXPECT_TRUE(lista.eliminar(2));  // medio
     EXPECT_TRUE(lista.eliminar(1));  // primero

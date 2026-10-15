@@ -66,10 +66,14 @@ mismo estado, incluso uno terminal, devuelve `true` sin mutación; toda otra
 transición no permitida devuelve `false` y conserva el proceso. Esto solo
 protege el modelo y no define cuándo ni en qué frontera temporal se cancela.
 
-`actualizarCpu` acepta únicamente un par consumido/restante no negativo que
-conserve el total, con CPU consumida no menor que la almacenada y CPU restante
-no mayor. La construcción de una instancia inicia CPU consumida en cero; el
-módulo no mide tiempo ni define un reinicio de sesión.
+`actualizarCpu` solo acepta avances efectivos mientras el proceso está en RUN.
+Una llamada con los mismos contadores actuales es idempotente y se acepta en
+cualquier estado, incluidos FINISH y CANCEL. Todo avance debe conservar el
+total, mantener CPU consumida no decreciente y CPU restante no creciente, y
+usar valores no negativos dentro del total; así no se acumula CPU en READY,
+WAIT ni estados terminales. Una llamada rechazada no muta el proceso. La
+construcción de una instancia inicia CPU consumida en cero; el módulo no mide
+tiempo ni define un reinicio de sesión.
 
 El Scheduler/motor es responsable de asignar tickets READY globales nuevos al
 admitir o reingresar un proceso a READY, conforme a DP-05. El valor inicial
