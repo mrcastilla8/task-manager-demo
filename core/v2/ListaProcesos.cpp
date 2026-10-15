@@ -4,6 +4,32 @@
 #include <utility>
 
 namespace ConcurrentSimulator::v2 {
+namespace {
+
+bool esActivo(Estado estado) noexcept {
+    return estado == Estado::READY || estado == Estado::RUN ||
+           estado == Estado::WAIT;
+}
+
+bool mismaVersionSinPrioridad(const Proceso& a, const Proceso& b) noexcept {
+    return a.pid == b.pid && a.nombre == b.nombre &&
+           a.tamanioBytes == b.tamanioBytes &&
+           a.tiempoCpuTotalMs == b.tiempoCpuTotalMs &&
+           a.tiempoCpuRestanteMs == b.tiempoCpuRestanteMs &&
+           a.tiempoCpuConsumidoMs == b.tiempoCpuConsumidoMs &&
+           a.tiempoEsperaMs == b.tiempoEsperaMs &&
+           a.ticketReady == b.ticketReady && a.estado == b.estado &&
+           a.operacionIO.habilitada == b.operacionIO.habilitada &&
+           a.operacionIO.despuesDeCpuMs == b.operacionIO.despuesDeCpuMs &&
+           a.operacionIO.duracionEsperaMs == b.operacionIO.duracionEsperaMs;
+}
+
+bool prioridadValida(Prioridad prioridad) noexcept {
+    return prioridad == Prioridad::P1 || prioridad == Prioridad::P2 ||
+           prioridad == Prioridad::P3;
+}
+
+}  // namespace
 
 ListaProcesos::~ListaProcesos() { limpiar(); }
 
@@ -164,19 +190,51 @@ bool ListaProcesos::actualizarEstado(int pid, Estado estado) noexcept {
 
 bool ListaProcesos::actualizarPrioridad(int pid,
                                         Prioridad prioridad) noexcept {
-    switch (prioridad) {
-        case Prioridad::P1:
-        case Prioridad::P2:
-        case Prioridad::P3:
-            break;
-        default:
-            return false;
+    if (!prioridadValida(prioridad)) {
+        return false;
     }
     Nodo* nodo = buscarNodo(pid);
     if (nodo == nullptr) {
         return false;
     }
     nodo->proceso.prioridad = prioridad;
+    return true;
+}
+
+bool ListaProcesos::aplicarPrioridades(
+    const std::vector<Proceso>& vistaCalculada) {
+    if (vistaCalculada.size() != cantidad_) {
+        return false;
+    }
+
+    // Primera pasada: verificar cobertura única, que la vista siga vigente y
+    // que todos los valores sean aplicables. No se escribe en ningún nodo.
+    for (std::size_t indice = 0; indice < vistaCalculada.size(); ++indice) {
+        const Proceso& candidato = vistaCalculada[indice];
+        if (!procesoConsistente(candidato) ||
+            !prioridadValida(candidato.prioridad)) {
+            return false;
+        }
+        for (std::size_t anterior = 0; anterior < indice; ++anterior) {
+            if (vistaCalculada[anterior].pid == candidato.pid) {
+                return false;
+            }
+        }
+        const Proceso* actual = buscar(candidato.pid);
+        if (actual == nullptr || !mismaVersionSinPrioridad(*actual, candidato) ||
+            (!esActivo(actual->estado) &&
+             candidato.prioridad != actual->prioridad)) {
+            return false;
+        }
+    }
+
+    // Segunda pasada: todas las validaciones terminaron, así que el lote se
+    // aplica completo y conserva los estados terminales sin cambios.
+    for (const Proceso& candidato : vistaCalculada) {
+        if (esActivo(candidato.estado)) {
+            (void)actualizarPrioridad(candidato.pid, candidato.prioridad);
+        }
+    }
     return true;
 }
 
@@ -220,19 +278,6 @@ bool ListaProcesos::actualizarTicketReady(int pid,
         return false;
     }
     nodo->proceso.ticketReady = ticket;
-    return true;
-}
-
-bool ListaProcesos::reclasificarPrioridades() {
-    std::vector<Proceso> copia = obtenerTodos();
-    if (!clasificarPrioridades(copia)) {
-        return false;
-    }
-    Nodo* nodo = primero_.get();
-    for (const Proceso& proceso : copia) {
-        nodo->proceso.prioridad = proceso.prioridad;
-        nodo = nodo->siguiente.get();
-    }
     return true;
 }
 

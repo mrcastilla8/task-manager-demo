@@ -32,6 +32,10 @@ public:
     // idempotente y FINISH/CANCEL no admiten salidas.
     bool actualizarEstado(int pid, Estado estado) noexcept;
     bool actualizarPrioridad(int pid, Prioridad prioridad) noexcept;
+    // Aplica prioridades calculadas externamente sobre una vista completa.
+    // Valida identidad, versión de los datos y todas las prioridades antes de
+    // mutar cualquier proceso. El Scheduler es el único clasificador.
+    bool aplicarPrioridades(const std::vector<Proceso>& vistaCalculada);
     // CPU consumida solo avanza y CPU restante solo disminuye durante la vida
     // del proceso en la lista; una instancia nueva comienza en cero.
     bool actualizarCpu(int pid, std::int64_t consumidoMs,
@@ -40,10 +44,6 @@ public:
     // El Scheduler asigna tickets globales; cero significa sin asignar.
     // Este setter local permite conservar o avanzar el ticket, nunca volver.
     bool actualizarTicketReady(int pid, std::uint64_t ticket) noexcept;
-
-    // Clasifica la población activa y persiste el lote en los nodos. No decide
-    // cuándo invocarse ni cambia CPU/cuota fijada del turno RUN.
-    bool reclasificarPrioridades();
 
     bool vacia() const noexcept;
     std::size_t cantidad() const noexcept;

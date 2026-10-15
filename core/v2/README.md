@@ -1,10 +1,9 @@
-# API provisional de Castilla para v2
+# Core v2: modelo y memoria oficiales
 
-Estos tipos y operaciones viven en `core/v2/` y sirven para desarrollar y
-validar el modelo, la lista y la memoria sin activar la migración de motores.
-No modifican ni ratifican `contracts/v2/`; sus nombres y firmas son una API
-provisional que se debe coordinar con Brickzon antes de consumirse como
-contrato compartido.
+Estos tipos y operaciones viven en `core/v2/` y son la fuente autoritativa de
+procesos y memoria para la integración v2. No modifican ni ratifican
+`contracts/v2/`; son APIs internas de módulos coordinadas con Scheduler y los
+motores.
 
 ## Modelo y clasificación
 
@@ -15,16 +14,12 @@ interpretan. `construirProcesoInicial` crea READY con CPU consumida cero,
 restante igual al total, prioridad inicial P3 y sin decidir cuándo se
 despachará.
 
-`clasificarPrioridades` recibe un vector de procesos, toma los extremos solo
-de READY/RUN/WAIT y actualiza esas prioridades en lote. FINISH/CANCEL se
-ignoran; un conjunto sin procesos activos no calcula extremos ni cambia nada.
-Un tamaño activo no positivo hace que devuelva `false` sin mutar prioridades.
-`clasificarTamano` puede reutilizarse para un tamaño dado con extremos positivos
-y `minimo <= tamanio <= maximo`; en caso `minimo == maximo` asigna P3. Aplica
-P1 si `3*(S-A) < D`, P2 si no es P1 y `3*(S-A) < 2*D`, y P3 en los demás
-casos. La implementación usa umbrales enteros por cociente/residuo, sin formar
-los productos. Estas funciones calculan clases; no disparan recálculos, eligen
-READY ni interrumpen RUN. Esos momentos pertenecen al Scheduler/motor.
+Core no calcula prioridades. El coordinador obtiene
+`ListaProcesos::obtenerTodos()`, entrega la copia al Scheduler y aplica el
+resultado con `ListaProcesos::aplicarPrioridades()`. Core valida
+PID/cobertura/vigencia del lote antes de escribir y nunca depende de la
+biblioteca Scheduler. La política P1/P2/P3 y la selección READY tienen una
+sola implementación en Scheduler.
 
 La cuota vigente continúa derivándose con `cuotaMs(prioridad)` del header
 candidato. No se almacena una cuota mutable en el proceso.
@@ -37,11 +32,11 @@ devuelto por `buscar` es const y queda invalidado al eliminar ese PID o
 destruir/mover la lista; la identidad no se puede cambiar por esa vista. Los
 cambios de estado, prioridad, CPU, espera y ticket se hacen por métodos
 controlados. La lista valida los campos del proceso al insertarlo y tiene copia
-profunda y movimientos que vacían la fuente. `reclasificarPrioridades()` crea
-una copia antes de aplicar la clasificación, por lo que fallos de asignación o
-datos inválidos no dejan una actualización parcial. La lista conserva PID,
-estado, ticket, contadores y orden; esta operación solo cambia prioridades de
-READY/RUN/WAIT.
+profunda y movimientos que vacían la fuente. `aplicarPrioridades()` valida una
+vista completa antes de persistir clases calculadas externamente; un lote
+incompleto, duplicado, inválido o desactualizado no deja actualización parcial.
+La lista conserva PID, estado, ticket, contadores y orden; solo cambia
+prioridades de READY/RUN/WAIT.
 
 `Memoria` registra tamaños positivos por PID y usa `int64_t` para capacidad,
 asignaciones y contadores. `reservar` rechaza valores inválidos, duplicados o
