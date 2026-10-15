@@ -1,5 +1,7 @@
 # Contratos compartidos — versión 1.0
 
+> **Actualización:** `contracts/*.h` sigue siendo v1.0 congelada y vigente para código existente. `contracts/v2/*.h` es una candidata namespaced a adopción, sin implementación consumidora. Prioridad 1–10 y quantum 500 ms describen únicamente v1; no son política operativa de la candidata v2. Consulte [contratos candidatos 2.0](../docs/CONTRATOS_V2.md), [decisiones aprobadas](../docs/DECISIONES_APROBADAS.md) y [migración](../docs/MIGRACION_CONTRATOS_V2.md).
+
 Estos encabezados son la API estable entre modelo, scheduler, motores y GUI.
 Todos los módulos deben depender de ellos y no de detalles internos de otro
 módulo.

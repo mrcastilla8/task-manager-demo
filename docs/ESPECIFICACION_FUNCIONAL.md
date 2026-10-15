@@ -1,84 +1,71 @@
 # Especificación funcional de ConcurrentSimulator
 
-Esta especificación consolida el comportamiento documentado del simulador y separa lo respaldado por las fuentes del docente de las decisiones existentes del equipo. Los contratos `contracts/*.h` y su [README](../contracts/README.md) describen la API vigente 1.0; esta especificación no los modifica ni convierte propuestas pendientes en una nueva API.
+**Estado canónico:** las decisiones aprobadas DP-01–DP-11 rigen el destino de contratos v2, aún candidato a adopción y no implementado. Los contratos v1.0 siguen vigentes para el código actual. Las políticas v1 y auditorías anteriores se identifican expresamente como históricas. Consulte [decisiones aprobadas](DECISIONES_APROBADAS.md), [contratos candidatos](CONTRATOS_V2.md) y [plan de migración](MIGRACION_CONTRATOS_V2.md).
 
-## Alcance y estado de la evidencia
+## Objetivo y fuente
 
-ConcurrentSimulator representa la llegada y admisión de procesos, su prioridad, la ocupación de memoria, el uso de un CPU lógico por turnos, los estados y el historial visual. Las notas académicas fijan el concepto de procesos en competencia, prioridades derivadas del tamaño en tres clases, y time-sharing en un procesador lógico. La política 1–10, quantum global 500 ms, aging de 2,000 ms, dos motores y campos del contrato 1.0 son decisiones registradas del equipo. Su coexistencia con la propuesta docente está pendiente; consultar [decisiones pendientes](DECISIONES_PENDIENTES.md).
+El simulador representa admisión de procesos, prioridad, memoria, un CPU lógico por turnos, estados y una vista temporal. Las notas del docente describen procesos, clases de prioridad por tamaño y time-sharing; DP-01–DP-11 son decisiones del equipo y no se atribuyen como requisitos docentes. Los documentos fuente permanecen fuera del repositorio; sus localizadores constan en [REQUISITOS_DOCENTE.md](REQUISITOS_DOCENTE.md).
 
-El recorrido funcional es: crear o recibir un proceso; validar y admitirlo según las reglas vigentes del equipo; incorporarlo a READY y a la vista de cola; elegir un proceso elegible según la política que se apruebe; concederle un intervalo de CPU; registrar tiempo, estado, evento y segmento de timeline; y repetir hasta completar, esperar, cancelar o no quedar trabajo ejecutable. Las reglas exactas de admisión, cuota, priorización dinámica y paso deben cerrarse antes de afirmar equivalencia entre motores.
+La ruta de trabajo v2 es: validar alta sin prioridad manual; admitir solo si PID/datos/memoria son válidos; colocar en READY con ticket nuevo; seleccionar con el Scheduler común; ejecutar una ráfaga limitada por cuota; registrar tiempo, eventos y CPU realmente ejecutada; resolver WAIT/FINISH/CANCEL; recalcular cuando DP-02 lo indica; repetir.
 
-## Entidades y conceptos
+## Proceso, prioridad y cuota
 
-### Proceso
+`AltaProceso` contiene PID, nombre, tamaño, CPU total y operación de E/S, nunca prioridad, cuota o ticket. `Proceso.prioridad` se clasifica automáticamente usando TL={READY,RUN,WAIT}. FINISH/CANCEL no participan en mínimo/máximo. TL vacía no calcula extremos. La regla exacta con tamaños enteros: D=B−A y X=3×(S−A); P1 si X<D, P2 si no se cumplió y X<2D, de otro modo P3. Límites estrictos. A=B produce P3. La evaluación debe evitar overflow para todo tamaño admitido.
 
-Las notas enumeran identificador, nombre, tamaño de memoria, estado, cuota en milisegundos y prioridad (pág. 23). El contrato 1.0 implementado además define prioridad base y actual, tiempo total/restante/espera, quantum consumido, orden de llegada y una operación opcional de E/S. Sus unidades y validaciones vigentes están en [contracts/README.md](../contracts/README.md) y [Proceso.h](../contracts/Proceso.h). Una cuota individual explícita no forma parte de esa estructura congelada.
+La cuota vigente es una sola fuente derivada: `cuotaVigenteMs(proceso)=cuotaMs(proceso.prioridad)`; P1=10 ms, P2=20 ms, P3=30 ms. No se almacena una cuota vigente mutable en `Proceso`. Al despacho, el motor copia el resultado a `EstadoSistema.cuotaTurnoFijadaMs`; esa cuota no cambia durante el turno aunque se reclasifique el conjunto. Es una cuota máxima: CPU restante agotada, WAIT o cancelación pueden terminar la ráfaga antes.
 
-### Estados y transiciones
+Después de una admisión exitosa, finalización o cancelación se solicita reclasificación y se aplica antes del siguiente despacho. Alta exitosa no interrumpe RUN ni cambia su cuota ya fijada. Alta rechazada por memoria no altera TL ni prioridades. No hay prioridad manual ni política activa 1–10 en v2.
 
-La matriz cubre los cinco estados definidos. `D` indica una flecha dibujada en el diagrama docente de la pág. 27 o una explicación docente separada de time-sharing en la pág. 28, según se cita en cada celda; no acredita una semántica temporal completa. `E` indica decisión/documentación del equipo; `I`, comportamiento observado en la implementación concurrente; `?`, transición no especificada. `?` no significa prohibida. Una llamada cancelar sobre FINISH no produce transición en la implementación actual. Los estados repetidos no son transición.
+## Scheduler y estados
 
-| Desde ↓ / Hacia → | READY | RUN | WAIT | FINISH | CANCEL |
-|---|---|---|---|---|---|
-| READY | — | D: flecha en diagrama p. 27; condición temporal no indicada | ?: sin regla | ?: sin regla | ?: sin flecha en diagrama |
-| RUN | I: el motor concurrente actual reingresa a READY al agotar quantum; política común y orden pendientes DP-05/06/07 | — | D: flecha en p. 27; causa/duración no indicadas | D: flecha en p. 27; condición temporal no indicada | D: flecha en p. 27; condición temporal no indicada |
-| WAIT | D: flecha en p. 27; condición/duración de retorno no indicadas | ?: sin flecha en diagrama | — | ?: sin flecha en diagrama | ?: sin flecha en diagrama |
-| FINISH | ?: sin regla | ?: sin regla | ?: sin regla | — | I: cancelar no cambia estado |
-| CANCEL | ?: sin regla | ?: sin regla | ?: sin regla | ?: sin regla | — |
+Una implementación compartida selecciona entre READY por prioridad descendente, ticket ascendente y PID ascendente como desempate defensivo. El ticket estrictamente creciente se renueva al ingresar a READY por admisión, retorno de WAIT o cuota agotada. La estructura de cola no elige el próximo proceso. No hay aging; el tiempo de espera puede seguir como métrica.
 
-Las notas enumeran READY, RUN, WAIT, CANCEL y FINISH (pág. 23). El diagrama de la página 27 dibuja READY→RUN, RUN→WAIT, RUN→FINISH, RUN→CANCEL y WAIT→READY. Cada flecha confirma que esa transición está representada en el diseño del docente; por sí sola no establece disparador, duración, orden temporal, política de admisión ni comportamiento de cada motor. La explicación de la página 28 dice que al pasar el tiempo asignado a un proceso entra otro, pero no especifica el estado del proceso anterior; no se atribuye RUN→READY a esa fuente. La implementación concurrente actual reingresa a READY al agotar quantum; su política común sigue pendiente. Las flechas ausentes quedan sin especificar, no prohibidas.
+| Desde | Hacia | Disparador/efecto v2 |
+|---|---|---|
+| Alta válida | READY | Reserva memoria y ticket; admisión fallida no muta estado activo. |
+| READY | RUN | Despacho y fijación de prioridad/cuota del turno. |
+| RUN | READY | Cuota agotada; ticket nuevo. |
+| RUN | WAIT | Bloqueo por E/S; conserva memoria. |
+| WAIT | READY | Despertar previsto; ticket nuevo. |
+| RUN | FINISH | CPU restante llega a cero; libera memoria; estado terminal. |
+| READY/RUN/WAIT | CANCEL | Cancelación; libera memoria una vez; estado terminal. |
 
-La [matriz de transiciones](#estados-y-transiciones) conserva por separado las flechas dibujadas, la explicación temporal de la página 28, el diseño del equipo y el comportamiento implementado. El alcance más amplio de transiciones, condiciones, eventos y cancelación debe acordarse en [DP-06](DECISIONES_PENDIENTES.md).
+Las reglas anteriores son decisiones funcionales del equipo para v2. La granularidad segura reproducible, la carrera con FINISH y el orden de publicación siguen como propuestas técnicas, no completan DP-06 por inferencia. El protocolo de checkpoints lógicos propuesto está en [Propuestas técnicas v2](PROPUESTAS_TECNICAS_V2.md#3-cancelación-run-parcial).
 
-## Prioridad y cola
+## Reloj, paso, eventos y timeline
 
-La regla docente `AssignPriority()` calcula mínimo `A`, máximo `B` y `H=(B-A)/3`; usa límites estrictos `< A+H` y `< A+2H`, asignando clases 1, 2 y 3 (notas, pág. 24). Por ejemplo, con `A=12`, `B=96`, `H=28`: `[12,40)` recibe 1, `[40,68)` recibe 2 y `[68,96]` recibe 3 para tamaños enteros incluidos en el conjunto. La página 25 presenta `ObtenerMaximaPrioridad()`; al comparar valores de prioridad, P3 tiene precedencia sobre P2 y P1. Está pendiente decidir si el equipo adopta la escala docente o la adapta a la política 1–10 (DP-01). El conjunto TL, los momentos de recálculo y el caso degenerado siguen en DP-02 y DP-03.
+Todo tiempo del modelo usa milisegundos simulados. Threads reales, demoras de coordinación, animación y refresco Qt no avanzan por sí mismos ese reloj.
 
-En el repositorio, `ColaProcesos` conserva orden de inserción y no planifica; `Scheduler` en ramas `brickzon` y `angel` selecciona la mayor prioridad actual y desempata por `ordenLlegada`, luego PID. FIFO describe el orden relativo de llegada dentro de una cola/clase; Round Robin describe el turno rotativo que surge cuando un proceso agotó su intervalo y se reencola detrás de sus pares. No son sinónimos. El Scheduler por sí solo no puede producir esa rotación si el motor no actualiza el orden de reingreso. La prueba de scheduler modela el cambio a mano; `ConcurrentEngine` no actualiza `ordenLlegada` al agotar quantum. No se corrige código en esta tarea.
+`siguientePaso()` requiere PAUSADO. Con READY despacha y ejecuta una ráfaga hasta cuota, WAIT, FINISH o CANCEL. Sin READY y con WAIT, avanza el reloj hasta el despertar más próximo sin atribuir CPU y sin despachar en esa misma llamada; el próximo despacho pertenece al paso siguiente. Sin procesos activos ni WAIT pendiente, publica FINALIZADO. DP-07 aprueba que modo continuo repita esas unidades, pero el contrato no define todavía cómo impulsar el motor lógico sin bloquear Qt. No llamar a un bucle continuo dentro de `iniciar()`. La [propuesta técnica](PROPUESTAS_TECNICAS_V2.md#1-ejecución-continua-sin-bloquear-qt) compara timer cooperativo del host con continuador inyectado; no se ratificó cambio de firma ni mecanismo. Ambos motores deben dar el mismo resultado observable por unidad.
 
-El aging existente suma prioridad a procesos READY cada 2,000 ms de espera hasta 10 y restablece la prioridad base al asignar CPU. La reclasificación docente por cambios del rango de tamaños es otro mecanismo. Su coexistencia o sustitución requiere decisión explícita; no se elimina el aging.
+Cada `BloqueTimeline` es exclusivamente un intervalo de CPU realmente ejecutado, semiabierto `[inicioMs,finMs)`, con PID positivo. Los intervalos van en orden cronológico, son positivos y no se solapan. CPU idle no es un bloque, no tiene PID de timeline y no introduce tipo contractual de segmento idle. La vista infiere huecos dentro de `[0, EstadoSistema.tiempoSimuladoMs)`: antes del primer intervalo, entre intervalos y después del último hasta el reloj del snapshot. Un `Evento` de CPU idle puede señalar inicio/fin con `pid=-1` como ausencia de proceso asociado, pero no cambia la regla de los bloques.
 
-## Tiempo, cuotas y eventos
+Ejemplo de ejecución, espera e idle inferido: A ejecuta `[0,8)`; luego A está WAIT y el CPU no ejecuta durante `[8,18)`; al despertar, B ejecuta `[18,22)`. Con snapshot en tiempo 27, el timeline contractual contiene solamente bloques `(A,[0,8))` y `(B,[18,22))`. La vista deduce idle `[8,18)` y `[22,27)`. No crea segmentos para esos huecos. Una pausa de interfaz sin avance del reloj no crea intervalo idle simulado.
 
-El contrato actual usa milisegundos simulados y configura un quantum global positivo, predeterminado en 500 ms por la configuración del equipo. Las notas incluyen cuota como atributo del proceso (pág. 23), y la transcripción ofrece `prioridad × 10 ms` como ejemplo (00:11:50–00:12:07). Cuota individual y quantum global son conceptos diferentes: el primero sería el tiempo concedido a un proceso; el segundo es el límite común vigente del motor. No hay compatibilidad acordada para migrar entre ambos.
+Eventos/snapshots reproducibles deben permitir mostrar RUN transitorio incluso si el motor completa una ráfaga antes del repintado. `Evento` hoy no define orden total de timestamps iguales ni inicio/fin de CPU. La propuesta de secuencia monótona, representación `[inicio,inicio+duración)` y replay por frontera está en [Propuestas técnicas v2](PROPUESTAS_TECNICAS_V2.md#4-orden-y-representación-de-eventos); no se ha añadido campo a los headers. El GUI no avanza el reloj.
 
-El contrato define `siguientePaso()` como una transición significativa; los documentos de integrantes alternan entre transición/evento y una ráfaga/turno completo. El motor concurrente implementado ejecuta una asignación/ráfaga (hasta quantum, fin o E/S) por llamada. El motor lógico no está presente en las ramas auditadas. El paso debe tener semántica única antes de exigir que ambos motores produzcan tiempos, estados, eventos y bloques equivalentes. Mientras tanto, resultados que dependan del tamaño de paso quedan condicionados a DP-07.
+## Memoria e interfaz
 
-Los eventos deben permitir explicar admisión, cambio de estado, agotamiento de quantum, fin, espera, cancelación y cambio de prioridad, según el contrato y la decisión de equipo. El orden, granularidad y timestamp exactos se rigen por la decisión DP-07.
+La admisión reserva tamaño por PID; WAIT conserva memoria; FINISH/CANCEL la libera una vez. La vista muestra proporciones por PID y espacio libre sin inventar direcciones. Procesos terminales permanecen en el historial de sesión aunque se excluyan de TL/memoria activa.
 
-## Memoria
+La interfaz destino está aprobada con Qt 6, C++17 y CMake. Poma consume la interfaz común y presenta datos; los widgets no planifican. Aldana mantiene motor lógico; Ángel motor concurrente. Ambos reutilizan el mismo Scheduler y representan un CPU lógico, incluso si uno utiliza varios threads.
 
-El comportamiento actual admite un proceso solo si es válido, no está ya cargado y cabe en la capacidad disponible. La implementación registra bytes ocupados por PID y libera la asignación al finalizar o cancelar. No asigna direcciones ni describe regiones contiguas. La vista funcional debe ir más allá de totales: presentar un mapa gráfico conceptual de memoria ocupada por procesos, sus tamaños relativos y disponibilidad, conectado visualmente con la lista/cola y CPU como en las notas, págs. 23 y 29 y la transcripción 00:08:25–00:09:28. El orden de bloques, orientación, escala y representación cuando hay falta de espacio están pendientes. No se requieren paginación, segmentación, memoria virtual ni reemplazo.
+El historial completo de sesión no descarta información. Indexación, eventos compactos, snapshots y render por ventana/zoom son propuestas de almacenamiento; el usuario puede desplazarse/usar zoom a través de la sesión.
 
-## Interfaz gráfica
+## Política de errores candidata
 
-La GUI se define como una vista coordinada de:
+`Resultado`, `CodigoResultado` y `ResultadoPaso` son propuestas técnicas; DP-01–DP-11 no eligieron el mecanismo de error. La [comparación por método y capa](PROPUESTAS_TECNICAS_V2.md#2-errores-excepciones-frente-a-códigos) muestra efectos sobre motores, GUI, mocks y pruebas. La distinción PID inexistente/FINISH/CANCEL también requiere ratificación; un terminal conocido no equivale a PID inexistente.
 
-1. Lista dinámica de procesos con identificador, nombre, tamaño, prioridad, estado y tiempos acordados.
-2. Cola READY con prioridad y orden de selección visibles.
-3. Mapa conceptual de memoria que distingue procesos cargados y espacio disponible.
-4. CPU lógico que muestra el proceso atendido y su estado.
-5. Temporizador del intervalo de atención.
-6. Timeline gráfico de time-sharing.
-7. Estados y transiciones observables.
-8. Registro textual de eventos y controles acordados por el equipo (iniciar, pausar, paso, reiniciar, agregar/cancelar y modo cuando exista integración).
+## Contexto histórico v1.0
 
-El timeline es una visualización gráfica de segmentos sobre un eje temporal. Cada segmento representa un intervalo de CPU de un proceso y su anchura es proporcional a la duración del intervalo. Es distinto de la tabla, la cola, el registro textual y cualquier archivo exportado. La guía visual docente es la comparación serial/time-sharing de la pág. 28. Las notas no exigen PNG, HTML, PDF ni exportación.
+El contrato raíz `contracts/*.h` mantiene tipos globales, escala 1–10, prioridad base/actual, quantum configurable 500 ms, aging, `quantumConsumido`, `ordenLlegada` y semántica previa de excepciones. Son vigentes para el código v1 que aún depende de ellos, no instrucciones de implementación v2. No modificar v1 durante la migración. La auditoría observó Scheduler en `brickzon`/`angel`, motor concurrente en `angel`, y ausencia de motor lógico/GUI en ramas revisadas; existencia en rama no significa integración.
 
-La GUI debe comunicar el CPU lógico único sin sugerir que los hilos de implementación son varios CPUs simulados. La escala exacta, segmentos de CPU inactivo, retención del historial y desplazamiento son decisiones pendientes (DP-08). Qt 6 es recomendado en el documento de Poma, no está confirmado como framework aprobado y no aparece en el código de las ramas auditadas.
+## Criterios de aceptación v2
 
-## Arquitectura y contratos
-
-El equipo documenta dos estrategias: motor lógico sin threads y motor concurrente con `std::thread`, mutex y variables de condición. Los threads reales son un detalle de implementación para coordinar workers; el Scheduler concede un único turno de CPU lógico a la vez. La explicación del profesor sobre time-sharing no obliga a tener ambas variantes. Mantenerlas forma parte de la decisión de arquitectura del equipo hasta nueva aprobación.
-
-Los encabezados compartidos v1.0 permanecen congelados. Cualquier aprobación de cuota individual, prioridades 1–3, política de recálculo, unidad de paso o nuevo tipo de segmento de timeline exige evaluar y versionar una migración coordinada; no se anticipa el cambio en esta especificación.
-
-## Criterios de aceptación funcionales
-
-- La implementación identifica claramente qué comportamiento corresponde al contrato 1.0, qué regla docente implementa y qué política fue acordada por el equipo.
-- El algoritmo de prioridad 1–3 produce los resultados de frontera de [los casos de referencia](CASOS_REFERENCIA.md), sin reemplazar silenciosamente el modelo 1–10.
-- El reingreso tras turno respeta la rotación aprobada entre pares de prioridad y se distingue de FIFO de llegada inicial.
-- Memoria muestra procesos ocupantes y no presenta direcciones físicas inexistentes.
-- Timeline codifica intervalos y duración proporcional sobre tiempo; no se confunde con el registro de eventos.
-- Motor lógico y concurrente, si ambos se conservan, publican resultados equivalentes para los escenarios acordados.
-- El mapa de transiciones y la unidad de `siguientePaso()` están aprobados y documentados antes de declarar equivalencia.
+- Clasificación exacta, fronteras estrictas, A=B, TL vacía y extremos enteros sin overflow.
+- Cuota vigente derivada solo de prioridad y cuota de turno fijada; sin doble fuente de verdad.
+- Selección READY prioridad/ticket/PID, tickets nuevos en cada ingreso y sin aging.
+- Paso, WAIT/idle, transiciones, CPU consumida y timeline iguales en ambos motores.
+- Todo bloque timeline usa PID>0 y representa CPU ejecutado; los huecos se infieren al renderizar.
+- Snapshot y replay no alteran el reloj simulado; interfaz Qt 6 no contiene política de planificación.
+- Documentación separa políticas de equipo de evidencia docente y v1 de candidata v2.
