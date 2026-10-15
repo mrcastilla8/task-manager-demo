@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <limits>
 #include <stdexcept>
+#include <utility>
 
 namespace ConcurrentSimulator::v2 {
 
@@ -10,8 +11,16 @@ SimulationEngineV2::SimulationEngineV2(Configuracion configuracion)
     : configuracion_(configuracion), memoria_(configuracion.memoriaTotalBytes) {}
 
 Resultado SimulationEngineV2::agregarProceso(const AltaProceso& alta) {
-    const ResultadoAdmision admision =
-        admitirProceso(alta, procesos_, memoria_);
+    // Preparar la admisión sobre copias. De este modo una excepción al asignar
+    // tickets, registrar eventos o clasificar prioridades no confirma cambios
+    // parciales en el estado observable del motor.
+    ListaProcesos procesosPropuestos = procesos_;
+    Memoria memoriaPropuesta = memoria_;
+    AsignadorTickets ticketsPropuestos = asignadorTickets_;
+    std::vector<Evento> eventosPropuestos = eventos_;
+
+    const ResultadoAdmision admision = admitirProceso(
+        alta, procesosPropuestos, memoriaPropuesta);
     switch (admision) {
         case ResultadoAdmision::ALTA_INVALIDA:
             return {CodigoResultado::ARGUMENTO_INVALIDO, alta.pid};
@@ -26,23 +35,51 @@ Resultado SimulationEngineV2::agregarProceso(const AltaProceso& alta) {
     }
 
     try {
-        if (!asignarTicket(alta.pid)) {
-            (void)procesos_.eliminar(alta.pid);
-            liberarMemoria(alta.pid);
+        const std::uint64_t ticket = ticketsPropuestos.asignar();
+        if (!procesosPropuestos.actualizarTicketReady(alta.pid, ticket)) {
             return {CodigoResultado::ESTADO_INVALIDO, alta.pid};
         }
     } catch (const std::overflow_error&) {
-        (void)procesos_.eliminar(alta.pid);
-        liberarMemoria(alta.pid);
         return {CodigoResultado::ESTADO_INVALIDO, alta.pid};
     }
 
+    eventosPropuestos.push_back(
+        {reloj_.ahoraMs(), TipoEvento::PROCESO_CREADO, alta.pid, 0, {}});
+    eventosPropuestos.push_back(
+        {reloj_.ahoraMs(), TipoEvento::PROCESO_ADMITIDO, alta.pid, 0, {}});
+    if (puntoFalloPrueba_ == PuntoFalloPrueba::TRAS_EVENTOS_ADMISION) {
+        throw std::runtime_error("Fallo de prueba después de preparar eventos");
+    }
+
+    std::vector<Proceso> vista = procesosPropuestos.obtenerTodos();
+    std::vector<Prioridad> prioridadesAnteriores;
+    prioridadesAnteriores.reserve(vista.size());
+    for (const Proceso& proceso : vista) {
+        prioridadesAnteriores.push_back(proceso.prioridad);
+    }
+    if (puntoFalloPrueba_ == PuntoFalloPrueba::DURANTE_RECLASIFICACION) {
+        throw std::runtime_error("Fallo de prueba durante reclasificación");
+    }
+    scheduler_.clasificarPrioridades(vista);
+    if (!procesosPropuestos.aplicarPrioridades(vista)) {
+        throw std::logic_error(
+            "La admisión preparada no pudo aplicar sus prioridades");
+    }
+    for (std::size_t indice = 0; indice < vista.size(); ++indice) {
+        if (vista[indice].prioridad != prioridadesAnteriores[indice]) {
+            eventosPropuestos.push_back(
+                {reloj_.ahoraMs(), TipoEvento::PRIORIDAD_CAMBIADA,
+                 vista[indice].pid, 0, {}});
+        }
+    }
+
+    procesos_ = std::move(procesosPropuestos);
+    memoria_ = std::move(memoriaPropuesta);
+    asignadorTickets_ = ticketsPropuestos;
+    eventos_ = std::move(eventosPropuestos);
     if (estado_ == EstadoEjecucion::FINALIZADO) {
         estado_ = EstadoEjecucion::DETENIDO;
     }
-    registrar(TipoEvento::PROCESO_CREADO, alta.pid);
-    registrar(TipoEvento::PROCESO_ADMITIDO, alta.pid);
-    reclasificar();
     return {CodigoResultado::OK, alta.pid};
 }
 
@@ -145,18 +182,73 @@ ResultadoPaso SimulationEngineV2::siguientePaso() {
             if (!reloj_.puedeAvanzar(delta)) {
                 return {CodigoResultado::ESTADO_INVALIDO, false, false, 0};
             }
-            registrar(TipoEvento::CPU_IDLE_INICIO);
-            reloj_.avanzar(delta);
-            registrar(TipoEvento::CPU_IDLE_FIN);
-        }
-        try {
-            if (!despertarEsperasVencidas()) {
+
+            // El avance idle y los despertares del instante objetivo forman
+            // una sola operación: comprobar los tickets antes de tocar reloj,
+            // eventos o estados evita un snapshot parcialmente publicado.
+            std::size_t ticketsNecesarios = 0;
+            for (const Espera& espera : esperas_) {
+                if (espera.despertarMs <= despertar) {
+                    const Proceso* esperando = procesos_.buscar(espera.pid);
+                    if (esperando != nullptr &&
+                        esperando->estado == Estado::WAIT) {
+                        ++ticketsNecesarios;
+                    }
+                }
+            }
+            const std::uint64_t proximo = asignadorTickets_.proximo();
+            const std::uint64_t disponibles =
+                (std::numeric_limits<std::uint64_t>::max)() - proximo;
+            if (ticketsNecesarios > disponibles) {
                 return {CodigoResultado::ESTADO_INVALIDO, false, false, 0};
             }
-        } catch (const std::overflow_error&) {
-            return {CodigoResultado::ESTADO_INVALIDO, false, false, 0};
+
+            // Preparar todos los cambios y sus posibles asignaciones antes de
+            // confirmar reloj/eventos en el estado publicado.
+            ListaProcesos procesosPropuestos = procesos_;
+            AsignadorTickets ticketsPropuestos = asignadorTickets_;
+            std::vector<Evento> eventosPropuestos = eventos_;
+            std::vector<Espera> esperasPropuestas = esperas_;
+            eventosPropuestos.push_back(
+                {inicio, TipoEvento::CPU_IDLE_INICIO, -1, 0, {}});
+            eventosPropuestos.push_back(
+                {despertar, TipoEvento::CPU_IDLE_FIN, -1, 0, {}});
+
+            for (const Espera& espera : esperas_) {
+                if (espera.despertarMs > despertar) continue;
+                const Proceso* esperando = procesos_.buscar(espera.pid);
+                if (esperando == nullptr || esperando->estado != Estado::WAIT) {
+                    continue;
+                }
+                const std::uint64_t ticket = ticketsPropuestos.asignar();
+                if (!procesosPropuestos.actualizarTicketReady(espera.pid,
+                                                              ticket) ||
+                    !procesosPropuestos.actualizarEstado(espera.pid,
+                                                         Estado::READY)) {
+                    return {CodigoResultado::ESTADO_INVALIDO, false, false, 0};
+                }
+                eventosPropuestos.push_back(
+                    {despertar, TipoEvento::WAIT_A_READY, espera.pid, 0, {}});
+            }
+
+            esperasPropuestas.erase(
+                std::remove_if(esperasPropuestas.begin(),
+                               esperasPropuestas.end(),
+                               [despertar](const Espera& espera) {
+                                   return espera.despertarMs <= despertar;
+                               }),
+                esperasPropuestas.end());
+
+            // Commit sin operaciones que asignen memoria ni puedan rechazar
+            // una transición después de avanzar el reloj.
+            procesos_ = std::move(procesosPropuestos);
+            asignadorTickets_ = ticketsPropuestos;
+            eventos_ = std::move(eventosPropuestos);
+            esperas_ = std::move(esperasPropuestas);
+            reloj_.avanzar(delta);
+            return {CodigoResultado::OK, true, false, delta};
         }
-        return {CodigoResultado::OK, true, false, reloj_.ahoraMs() - inicio};
+        return {CodigoResultado::OK, false, false, 0};
     }
 
     const Proceso* seleccionado = procesos_.buscar(pid);
@@ -362,6 +454,23 @@ bool SimulationEngineV2::despertarEsperasVencidas() {
         (std::numeric_limits<std::uint64_t>::max)() - proximo;
     if (vencidas.size() > disponibles) {
         throw std::overflow_error("Se agotó el espacio de tickets READY");
+    }
+    const std::uint64_t ultimoTicketAsignable = vencidas.empty()
+        ? 0
+        : proximo + static_cast<std::uint64_t>(vencidas.size() - 1U);
+
+    // Reserva recursos que podrían fallar antes de asignar tickets o mutar
+    // procesos; registrar() no realoja al publicar estos despertares.
+    if (vencidas.size() > eventos_.max_size() - eventos_.size()) {
+        throw std::length_error("El historial de eventos alcanzó su capacidad");
+    }
+    eventos_.reserve(eventos_.size() + vencidas.size());
+    for (const Espera& espera : vencidas) {
+        const Proceso* proceso = procesos_.buscar(espera.pid);
+        if (proceso == nullptr || proceso->estado != Estado::WAIT ||
+            proceso->ticketReady > ultimoTicketAsignable) {
+            throw std::logic_error("El estado WAIT cambió antes de asignar tickets");
+        }
     }
 
     std::vector<std::uint64_t> nuevosTickets;

@@ -25,6 +25,14 @@ public:
     EstadoSistema obtenerEstado() const override;
 
 private:
+    enum class PuntoFalloPrueba {
+        NINGUNO,
+        TRAS_EVENTOS_ADMISION,
+        DURANTE_RECLASIFICACION
+    };
+
+    friend struct SimulationEngineV2TestAccess;
+
     struct Espera {
         int pid{-1};
         std::int64_t despertarMs{0};
@@ -53,6 +61,7 @@ private:
     int pidEjecutando_{-1};
     std::int64_t cuotaTurnoFijadaMs_{0};
     std::int64_t cpuConsumidaTurnoMs_{0};
+    PuntoFalloPrueba puntoFalloPrueba_{PuntoFalloPrueba::NINGUNO};
 };
 
 }  // namespace ConcurrentSimulator::v2
