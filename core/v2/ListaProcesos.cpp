@@ -1,4 +1,5 @@
 #include "core/v2/ListaProcesos.h"
+#include "core/v2/Proceso.h"
 
 #include <utility>
 
@@ -57,7 +58,7 @@ void ListaProcesos::intercambiar(ListaProcesos& otra) noexcept {
 }
 
 bool ListaProcesos::agregar(const Proceso& proceso) {
-    if (proceso.pid <= 0 || buscar(proceso.pid) != nullptr) {
+    if (!procesoConsistente(proceso) || buscar(proceso.pid) != nullptr) {
         return false;
     }
     auto nuevo = std::make_unique<Nodo>(proceso);
@@ -92,10 +93,6 @@ bool ListaProcesos::eliminar(int pid) noexcept {
     return true;
 }
 
-Proceso* ListaProcesos::buscar(int pid) noexcept {
-    return const_cast<Proceso*>(static_cast<const ListaProcesos&>(*this).buscar(pid));
-}
-
 const Proceso* ListaProcesos::buscar(int pid) const noexcept {
     for (const Nodo* nodo = primero_.get(); nodo != nullptr;
          nodo = nodo->siguiente.get()) {
@@ -104,6 +101,99 @@ const Proceso* ListaProcesos::buscar(int pid) const noexcept {
         }
     }
     return nullptr;
+}
+
+ListaProcesos::Nodo* ListaProcesos::buscarNodo(int pid) noexcept {
+    for (Nodo* nodo = primero_.get(); nodo != nullptr;
+         nodo = nodo->siguiente.get()) {
+        if (nodo->proceso.pid == pid) {
+            return nodo;
+        }
+    }
+    return nullptr;
+}
+
+bool ListaProcesos::actualizarEstado(int pid, Estado estado) noexcept {
+    switch (estado) {
+        case Estado::READY:
+        case Estado::RUN:
+        case Estado::WAIT:
+        case Estado::FINISH:
+        case Estado::CANCEL:
+            break;
+        default:
+            return false;
+    }
+    Nodo* nodo = buscarNodo(pid);
+    if (nodo == nullptr) {
+        return false;
+    }
+    nodo->proceso.estado = estado;
+    return true;
+}
+
+bool ListaProcesos::actualizarPrioridad(int pid,
+                                        Prioridad prioridad) noexcept {
+    switch (prioridad) {
+        case Prioridad::P1:
+        case Prioridad::P2:
+        case Prioridad::P3:
+            break;
+        default:
+            return false;
+    }
+    Nodo* nodo = buscarNodo(pid);
+    if (nodo == nullptr) {
+        return false;
+    }
+    nodo->proceso.prioridad = prioridad;
+    return true;
+}
+
+bool ListaProcesos::actualizarCpu(int pid, std::int64_t consumidoMs,
+                                  std::int64_t restanteMs) noexcept {
+    Nodo* nodo = buscarNodo(pid);
+    if (nodo == nullptr || consumidoMs < 0 || restanteMs < 0 ||
+        consumidoMs > nodo->proceso.tiempoCpuTotalMs ||
+        restanteMs != nodo->proceso.tiempoCpuTotalMs - consumidoMs) {
+        return false;
+    }
+    nodo->proceso.tiempoCpuConsumidoMs = consumidoMs;
+    nodo->proceso.tiempoCpuRestanteMs = restanteMs;
+    return true;
+}
+
+bool ListaProcesos::actualizarTiempoEspera(int pid,
+                                           std::int64_t esperaMs) noexcept {
+    Nodo* nodo = buscarNodo(pid);
+    if (nodo == nullptr || esperaMs < 0) {
+        return false;
+    }
+    nodo->proceso.tiempoEsperaMs = esperaMs;
+    return true;
+}
+
+bool ListaProcesos::actualizarTicketReady(int pid,
+                                          std::uint64_t ticket) noexcept {
+    Nodo* nodo = buscarNodo(pid);
+    if (nodo == nullptr) {
+        return false;
+    }
+    nodo->proceso.ticketReady = ticket;
+    return true;
+}
+
+bool ListaProcesos::reclasificarPrioridades() {
+    std::vector<Proceso> copia = obtenerTodos();
+    if (!clasificarPrioridades(copia)) {
+        return false;
+    }
+    Nodo* nodo = primero_.get();
+    for (const Proceso& proceso : copia) {
+        nodo->proceso.prioridad = proceso.prioridad;
+        nodo = nodo->siguiente.get();
+    }
+    return true;
 }
 
 std::vector<Proceso> ListaProcesos::obtenerTodos() const {

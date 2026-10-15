@@ -33,8 +33,15 @@ candidato. No se almacena una cuota mutable en el proceso.
 
 `ListaProcesos` conserva el orden de inserción, rechaza PID no positivo o
 duplicado y expone vistas por copia junto a búsqueda prestada. Un puntero
-devuelto por `buscar` queda invalidado al eliminar ese PID o destruir/mover la
-lista. La lista tiene copia profunda y movimientos que vacían la fuente.
+devuelto por `buscar` es const y queda invalidado al eliminar ese PID o
+destruir/mover la lista; la identidad no se puede cambiar por esa vista. Los
+cambios de estado, prioridad, CPU, espera y ticket se hacen por métodos
+controlados. La lista valida los campos del proceso al insertarlo y tiene copia
+profunda y movimientos que vacían la fuente. `reclasificarPrioridades()` crea
+una copia antes de aplicar la clasificación, por lo que fallos de asignación o
+datos inválidos no dejan una actualización parcial. La lista conserva PID,
+estado, ticket, contadores y orden; esta operación solo cambia prioridades de
+READY/RUN/WAIT.
 
 `Memoria` registra tamaños positivos por PID y usa `int64_t` para capacidad,
 asignaciones y contadores. `reservar` rechaza valores inválidos, duplicados o
@@ -43,3 +50,10 @@ actualiza utilización, por lo que un fallo de reserva de contenedor propaga la
 excepción sin dejar los contadores desalineados. `liberar` retorna `false` si
 no existía PID y no interpreta estados de proceso; WAIT conserva la asignación
 porque la liberación se hace explícitamente por PID.
+
+`admitirProceso` valida, rechaza PID ya presente en lista o memoria, reserva y
+luego inserta. Un guardián libera solo la reserva creada por esa llamada si la
+inserción falla o lanza; la inserción normal de `ListaProcesos` tiene garantía
+fuerte y deja la lista intacta al fallar. La variante `detail` permite probar
+fallos de inserción y no se ofrece como API para Scheduler/motores. Estas
+operaciones no son thread-safe ni reemplazan la coordinación del motor.

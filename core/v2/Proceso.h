@@ -11,6 +11,7 @@ namespace ConcurrentSimulator::v2 {
 bool validarAltaProceso(const AltaProceso& alta) noexcept;
 Proceso construirProcesoInicial(const AltaProceso& alta);
 bool cpuConsistente(const Proceso& proceso) noexcept;
+bool procesoConsistente(const Proceso& proceso) noexcept;
 
 // Recalcula en lote la prioridad de READY/RUN/WAIT. Los terminales se ignoran.
 // Devuelve false para una población activa con tamaños no positivos; no muta

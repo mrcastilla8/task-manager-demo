@@ -53,6 +53,37 @@ bool cpuConsistente(const Proceso& proceso) noexcept {
                proceso.tiempoCpuTotalMs - proceso.tiempoCpuConsumidoMs;
 }
 
+bool procesoConsistente(const Proceso& proceso) noexcept {
+    if (proceso.pid <= 0 || proceso.nombre.empty() ||
+        proceso.tamanioBytes <= 0 || proceso.tiempoCpuTotalMs <= 0 ||
+        !cpuConsistente(proceso) || proceso.tiempoEsperaMs < 0) {
+        return false;
+    }
+    if (proceso.operacionIO.habilitada &&
+        (proceso.operacionIO.despuesDeCpuMs <= 0 ||
+         proceso.operacionIO.despuesDeCpuMs >= proceso.tiempoCpuTotalMs ||
+         proceso.operacionIO.duracionEsperaMs <= 0)) {
+        return false;
+    }
+    switch (proceso.estado) {
+        case Estado::READY:
+        case Estado::RUN:
+        case Estado::WAIT:
+        case Estado::FINISH:
+        case Estado::CANCEL:
+            break;
+        default:
+            return false;
+    }
+    switch (proceso.prioridad) {
+        case Prioridad::P1:
+        case Prioridad::P2:
+        case Prioridad::P3:
+            return true;
+    }
+    return false;
+}
+
 Prioridad clasificarTamano(std::int64_t tamanioBytes,
                            std::int64_t minimoBytes,
                            std::int64_t maximoBytes) noexcept {

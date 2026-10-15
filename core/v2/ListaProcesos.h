@@ -24,10 +24,20 @@ public:
     bool agregar(const Proceso& proceso);
     bool eliminar(int pid) noexcept;
 
-    Proceso* buscar(int pid) noexcept;
     const Proceso* buscar(int pid) const noexcept;
     std::vector<Proceso> obtenerTodos() const;
     std::vector<Proceso> obtenerPorEstado(Estado estado) const;
+
+    bool actualizarEstado(int pid, Estado estado) noexcept;
+    bool actualizarPrioridad(int pid, Prioridad prioridad) noexcept;
+    bool actualizarCpu(int pid, std::int64_t consumidoMs,
+                       std::int64_t restanteMs) noexcept;
+    bool actualizarTiempoEspera(int pid, std::int64_t esperaMs) noexcept;
+    bool actualizarTicketReady(int pid, std::uint64_t ticket) noexcept;
+
+    // Clasifica la población activa y persiste el lote en los nodos. No decide
+    // cuándo invocarse ni cambia CPU/cuota fijada del turno RUN.
+    bool reclasificarPrioridades();
 
     bool vacia() const noexcept;
     std::size_t cantidad() const noexcept;
@@ -40,6 +50,7 @@ private:
     };
 
     void limpiar() noexcept;
+    struct Nodo* buscarNodo(int pid) noexcept;
 
     std::unique_ptr<Nodo> primero_;
     Nodo* ultimo_{nullptr};
