@@ -1,290 +1,69 @@
-# Integrante 4 — Motor Concurrente con Threads Reales
+# Integrante 4 — Motor concurrente con threads reales
 
-## Objetivo
+Asignación recuperada de `origin/angel`. Se restituye el detalle de workers, coordinación, sincronización, cierre y pruebas, conservando que los hilos reales implementan un solo CPU lógico simulado.
 
-Implementar una segunda versión del motor utilizando concurrencia real en C++:
+## Objetivo y principio de operación
 
-- `std::thread`
-- `std::mutex`
-- `std::condition_variable`
-- sincronización segura
+El motor concurrente implementa el mismo `IExecutionEngine` que el motor lógico, usando C++ `std::thread`, `std::mutex` y `std::condition_variable`. El Scheduler continúa decidiendo qué PID obtiene CPU lógico. Cada proceso tiene un worker que espera un permiso, ejecuta una ráfaga simulada y reporta resultado; un coordinador selecciona, concede permiso, integra resultados y actualiza el snapshot. Aunque existan varios threads de sistema, como máximo un proceso recibe CPU lógico a la vez.
 
-Debe implementar el mismo contrato `IExecutionEngine` que el motor lógico.
+La arquitectura concurrente es decisión de equipo. El docente describe time-sharing en un CPU lógico, pero no obliga a tener workers o dos motores.
 
----
+## Archivos y dependencias
 
-## Principio fundamental
+Entregables:
 
-Los threads reales **no reemplazan la política de planificación**.
+- `concurrent/ConcurrentEngine.h`
+- `concurrent/ConcurrentEngine.cpp`
+- `concurrent/ProcessThread.h`
+- `concurrent/ProcessThread.cpp`
+- `concurrent/Synchronization.h`
+- Pruebas: `tests/test_concurrent_basic.cpp`, `test_concurrent_pause.cpp`, `test_concurrent_cancel.cpp`, `test_concurrent_thread_shutdown.cpp`, `test_concurrent_race_safety.cpp`.
 
-El Scheduler continúa decidiendo qué proceso simulado obtiene el CPU.
+Depende de contratos v1.0, modelo/cola/memoria y Scheduler. Se puede desarrollar con procesos sintéticos, sin GUI. No cambia la API de `IExecutionEngine`, no duplica Scheduler ni configura widgets.
 
-El sistema operativo seguirá administrando físicamente los threads, pero el proyecto controla de forma lógica qué thread puede avanzar.
+## Coordinación y sincronización
 
----
+- El coordinador espera la condición de ejecución, recopila procesos, consulta Scheduler y concede un `SolicitudTurno` al worker seleccionado.
+- `ProcessThread` espera permiso de turno mediante condición; al acabar devuelve `ResultadoRafaga`, duración realmente ejecutada y motivo (`QUANTUM_AGOTADO`, `PROCESO_TERMINADO`, `BLOQUEO_IO` o `CANCELADO`).
+- No usar busy waiting (por ejemplo, un ciclo que consulta una bandera continuamente). Los workers que no tienen turno deben dormir en una variable de condición.
+- Proteger snapshot y estado compartido con mutex: procesos, estado, prioridad, tiempo restante, PID ejecutando, memoria, eventos y timeline.
+- Usar `lock_guard`/`unique_lock` según duración y espera; nunca mantener el mutex de estado tomado mientras se bloquea esperando el resultado de un worker si eso impide que el worker/cancelación complete.
+- Cada worker protege sus banderas/solicitud/resultado con su mutex; sus variables de condición separan espera de turno y notificación de fin.
+- `ConcurrentEngine` usa mutex de estado y condiciones para coordinador y paso en curso; `ProcessThread` tiene mutex y CV propios. Documentar cualquier cambio de alcance de protección antes de considerarlo seguro.
 
-## Arquitectura esperada
+## Pausa, paso, cancelación y cierre
 
-```text
-                 Scheduler
-                     │
-             selecciona PID
-                     │
-                     ▼
-          ConcurrentEngine
-                     │
-         concede permiso lógico
-                     │
-       ┌─────────────┼─────────────┐
-       ▼             ▼             ▼
-   Thread A       Thread B      Thread C
-     RUN            WAIT          WAIT
-```
+- `iniciar()` reanuda una pausa y es idempotente si ya está ejecutando.
+- `pausar()` detiene avances nuevos y espera que el paso en curso llegue a un punto consistente. Los workers quedan bloqueados hasta un turno posterior.
+- `siguientePaso()` exige PAUSADO bajo el contrato actual. El motor concurrente existente ejecuta una ráfaga/turno mediante un worker; la definición contractual “una transición significativa” y la ráfaga completa no coinciden. Cerrar DP-07 antes de fijar el comportamiento compartido con motor lógico.
+- `cancelarProceso()` debe ser seguro ante PID inexistente o ya cancelado; al cancelar worker activo, notificarlo y evitar deadlock. El motor actual libera memoria y permite cancelar READY/RUN/WAIT, ignora FINISH/CANCEL. El segmento parcial al cancelar RUN requiere decisión DP-06.
+- `reiniciar()` detiene y une workers, elimina procesos/eventos/timeline del ciclo y conserva quantum/capacidad según el contrato.
+- Destructor debe señalizar terminación, despertar coordinador/workers y hacer `join()` de todos los threads joinable; no dejar threads huérfanos.
+- Ningún worker actualiza widgets. `ConcurrentEngine` entrega snapshot/eventos; GUI procesa ese estado desde su hilo principal mediante mecanismo seguro.
 
----
+## Distribución de trabajo esperada
 
-## Responsabilidades
+El motor usa `scheduler.seleccionarSiguiente(...)` para elegir; `ordenarColaPrioridad(...)` prepara presentación. Al retornar un proceso agotado de quantum a READY, el motor debe asignar el nuevo orden/ticket de reingreso según DP-05. El Scheduler no puede crear el Round Robin por sí solo. La prueba de empate configura el nuevo `ordenLlegada` manualmente, mientras la implementación concurrente actual no lo actualiza; mantener esta discrepancia explícita y corregirla solo en una tarea de código aprobada.
 
-### 1. `ConcurrentEngine`
+Velocidad visual y temporizador de refresco no deben cambiar la duración simulada. El intervalo de coordinador de 10 ms que existe en el motor concurrente es coordinación real, no quantum simulado.
 
-Ejemplo:
+## Cinco pruebas de seguridad y comportamiento
 
-```cpp
-class ConcurrentEngine : public IExecutionEngine {
-public:
-    void agregarProceso(const Proceso& proceso) override;
-    void cancelarProceso(int pid) override;
+1. **`tests/test_concurrent_basic.cpp`:** creación, quantum válido/no válido, validación/PID duplicado/memoria insuficiente, paso pausado, tiempo y bloque de timeline con `[inicio, fin)`.
+2. **`tests/test_concurrent_pause.cpp`:** pausa e inicio idempotentes; espera de `siguientePaso()` fuera de pausa; al pausar deja de avanzar el reloj mientras workers duermen.
+3. **`tests/test_concurrent_cancel.cpp`:** cancelar PID inexistente, READY y ya cancelado; liberar memoria; ejecutar el proceso restante; cancelar último proceso. Añadir/coordinar casos RUN/WAIT según DP-06.
+4. **`tests/test_concurrent_thread_shutdown.cpp`:** destruir engine con workers activos; reiniciar detiene workers, limpia snapshot y timeline/eventos, conserva capacidad/quantum y permite nuevas altas.
+5. **`tests/test_concurrent_race_safety.cpp`:** lectores llaman a `obtenerEstado()` concurrentemente mientras coordinador avanza y productor añade procesos; snapshots mantienen contadores/timestamps coherentes y los threads se unen al cerrar.
 
-    void iniciar() override;
-    void pausar() override;
-    void reiniciar() override;
-    void siguientePaso() override;
-
-    EstadoSistema obtenerEstado() const override;
-};
-```
-
----
-
-## 2. Thread por proceso
-
-Cada proceso puede asociarse con una estructura:
-
-```cpp
-class ProcessThread {
-private:
-    std::thread worker;
-    std::mutex mutex;
-    std::condition_variable cv;
-
-    bool permisoEjecucion;
-    bool terminado;
-};
-```
-
-Conceptualmente:
-
-```cpp
-while (!terminado) {
-    esperarPermisoDelScheduler();
-    ejecutarQuantumLogico();
-    notificarFinDeQuantum();
-}
-```
-
----
-
-## 3. Sin busy waiting
-
-Está prohibido implementar:
-
-```cpp
-while (!miTurno) {
-}
-```
-
-Debe utilizarse:
-
-```cpp
-std::condition_variable
-```
-
-para suspender los threads que no tienen permiso.
-
----
-
-## 4. Exclusión mutua
-
-Proteger los datos compartidos:
-
-- lista/cola de procesos;
-- estados;
-- prioridad;
-- tiempo restante;
-- historial;
-- eventos;
-- proceso ejecutándose.
-
-Utilizar:
-
-```cpp
-std::mutex
-std::lock_guard
-std::unique_lock
-```
-
-según corresponda.
-
----
-
-## 5. Scheduler
-
-No duplicar la lógica del integrante 2.
-
-Debe usar:
-
-```cpp
-scheduler.seleccionarSiguiente(...)
-```
-
-para determinar qué proceso obtiene permiso.
-
----
-
-## 6. GUI
-
-Los threads **nunca actualizan widgets directamente**.
-
-El flujo esperado es:
-
-```text
-threads
-   ↓
-estado/eventos protegidos
-   ↓
-ConcurrentEngine
-   ↓
-EstadoSistema
-   ↓
-GUI
-```
-
-Si Qt requiere signals/slots, la GUI se encarga de recibir la información en su propio hilo.
-
----
-
-## 7. Pausa y paso a paso
-
-Debe ser posible:
-
-```text
-Pausar
-Paso siguiente
-Continuar
-```
-
-Aunque existan threads reales.
-
-Al pausar, los workers deben quedar esperando mediante `condition_variable`.
-
----
-
-## 8. Terminación segura
-
-Al cerrar/reiniciar:
-
-- notificar a todos los threads;
-- marcar terminación;
-- ejecutar `join()` sobre threads joinable;
-- liberar recursos;
-- evitar threads huérfanos.
-
-Ejemplo:
-
-```cpp
-if (worker.joinable()) {
-    worker.join();
-}
-```
-
----
-
-## 9. Race conditions
-
-El integrante debe identificar y documentar explícitamente al menos:
-
-- qué datos son compartidos;
-- qué mutex protege cada dato;
-- qué condiciones despiertan threads;
-- cómo se evita que dos procesos ejecuten el CPU lógico simultáneamente.
-
-Esto formará parte de la explicación del curso.
-
----
-
-## Entregables
-
-```text
-concurrent/
-    ConcurrentEngine.h
-    ConcurrentEngine.cpp
-    ProcessThread.h
-    ProcessThread.cpp
-    Synchronization.h
-```
-
-Tests:
-
-```text
-tests/
-    test_concurrent_basic.cpp
-    test_concurrent_pause.cpp
-    test_concurrent_cancel.cpp
-    test_concurrent_thread_shutdown.cpp
-    test_concurrent_race_safety.cpp
-```
-
----
-
-## No es responsabilidad de este integrante
-
-No implementar:
-
-- GUI;
-- animaciones;
-- widgets;
-- política de prioridad;
-- cálculo de aging;
-- componentes visuales;
-- un scheduler distinto.
-
----
-
-## Dependencias
-
-Depende de:
-
-- contratos;
-- modelo;
-- Scheduler.
-
-Puede desarrollar primero con procesos sintéticos.
-
-La GUI no debe ser necesaria para probar este módulo.
-
----
+Los escenarios son expectativas de equipo/pruebas del módulo, no requisitos del docente.
 
 ## Criterios de aceptación
 
-El módulo se considera terminado cuando:
-
-- cada proceso concurrente utiliza un thread real;
-- no hay busy waiting;
-- existe sincronización con mutex/condition_variable;
-- un único proceso obtiene el CPU lógico a la vez;
-- pausa y reanudación funcionan;
-- cancelar procesos funciona;
-- todos los threads terminan correctamente;
-- produce el mismo formato `EstadoSistema` que `SimulationEngine`;
-- no actualiza Qt directamente;
-- no duplica la política del Scheduler.
+- Sin busy waiting; workers sin turno esperan bloqueados.
+- Mutex y condiciones protegen datos compartidos y la terminación despierta a todos los waiters.
+- Nunca hay dos procesos en RUN/CPU lógico a la vez.
+- Pausa, reanudación, turno único, cancelación, reinicio y destrucción terminan sin deadlock ni workers huérfanos.
+- Snapshot, reloj, evento y timeline describen el mismo resultado de ráfaga.
+- `ordenLlegada`/ticket se actualiza en el motor en el reingreso aprobado y la prueba integrada demuestra alternancia.
+- No se toca GUI desde threads ni se duplica Scheduler.
+- Los resultados observables equivalen al motor lógico con la semántica de paso acordada.

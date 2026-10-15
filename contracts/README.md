@@ -54,3 +54,26 @@ unidades, orden de agregados, excepciones o métodos virtuales requiere publicar
 una nueva versión del contrato y coordinar la migración de todos los módulos.
 Correcciones internas y funciones auxiliares que no cambien el comportamiento
 observable pueden incorporarse sin romper la versión.
+
+## Precedencia documental y fuentes académicas
+
+Este archivo y los encabezados `contracts/*.h` describen la API vigente del
+equipo; no son una transcripción de todos los requisitos académicos. La
+especificación funcional y la matriz de trazabilidad registran por separado
+las reglas del docente, decisiones del equipo y preguntas pendientes. En
+particular, la prioridad docente 1–3 y la cuota de proceso no modifican esta
+versión 1.0: su compatibilidad con prioridades 1–10 y el quantum global de
+500 ms requiere aprobación y una migración coordinada. Consulte
+[`docs/DECISIONES_PENDIENTES.md`](../docs/DECISIONES_PENDIENTES.md) (DP-01 y
+DP-04).
+
+La guía docente de lista enlazada simple no cambia la implementación de
+`ColaProcesos` ni congela esa estructura dentro de la API; consulte DP-09.
+`BloqueTimeline` expresa intervalos temporales con PID según la API actual.
+Los detalles gráficos pendientes de CPU inactivo y memoria conceptual no
+deben resolverse mediante cambios implícitos al contrato.
+
+Una decisión futura que necesite campos de cuota, otra escala de prioridad,
+semántica de recálculo o representación de intervalos sin PID deberá proponer
+una nueva versión contractual. Ninguna modificación de encabezados se incluye
+en esta consolidación documental.
