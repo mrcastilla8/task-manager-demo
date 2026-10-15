@@ -18,7 +18,9 @@ bool esperarHasta(const std::function<bool()>& condicion, int limiteMs = 5000) {
         if (condicion()) {
             return true;
         }
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        // yield y no sleep: en Windows sleep_for(1ms) puede dormir ~15 ms y la
+        // ventana de la rafaga (retardo de pruebas) se perderia.
+        std::this_thread::yield();
     }
     return condicion();
 }
@@ -40,7 +42,7 @@ int main() {
     engine.configurarIntervaloCoordinadorMs(0);
     engine.configurarQuantum(100);
     // Ensancha la ventana de la rafaga para que las carreras sean reproducibles.
-    engine.configurarRetardoRafagaPruebasMs(15);
+    engine.configurarRetardoRafagaPruebasMs(40);
 
     // Monitor: valida invariantes del snapshot durante toda la prueba.
     std::atomic<bool> monitorActivo{true};
