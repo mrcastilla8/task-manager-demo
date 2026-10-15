@@ -398,7 +398,7 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
     }
 
     SolicitudTurno solicitud;
-    solicitud.cuotaMs = quantumMs_;
+    solicitud.cuotaMs = cuotaParaDespachoInterno(*proc);
     solicitud.tiempoRestante = proc->tiempoRestante;
     solicitud.retardoRealMs = retardoRafagaPruebasMs_;
 
@@ -569,6 +569,14 @@ void ConcurrentEngine::acumularEsperaListosInterno(std::int64_t delta) {
             proceso->tiempoEspera += delta;
         }
     }
+}
+
+std::int64_t ConcurrentEngine::cuotaParaDespachoInterno(
+    const Proceso& /*proceso*/) const noexcept {
+    // Unico punto donde se decide la cuota del turno; se copia a la solicitud al
+    // despachar y no cambia durante la rafaga (DP-04). Hoy es el quantum global
+    // de v1. Al migrar a v2 devolvera cuotaMs(prioridad): P1=10, P2=20, P3=30 ms.
+    return quantumMs_;
 }
 
 Evento ConcurrentEngine::construirEvento(TipoEvento tipo, int pid,

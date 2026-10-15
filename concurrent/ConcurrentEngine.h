@@ -86,6 +86,7 @@ private:
         Proceso& proceso,
         const char* descripcion = "Proceso cancelado por accion del usuario");
     Evento construirEvento(TipoEvento tipo, int pid, std::string descripcion) const;
+    std::int64_t cuotaParaDespachoInterno(const Proceso& proceso) const noexcept;
     void inyectarFalloAlta(EtapaAlta etapa) const;
 
     // Los siguientes metodos exigen mutexEstado_ tomado por el llamador.
