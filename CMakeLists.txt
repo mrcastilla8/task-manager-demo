@@ -14,6 +14,15 @@ add_library(simulator_core
     core/Memoria.cpp
 )
 
+add_library(simulator_core_v2
+    core/v2/Proceso.cpp
+    core/v2/ListaProcesos.cpp
+    core/v2/Memoria.cpp
+    core/v2/AdmisorProcesos.cpp
+)
+
+target_include_directories(simulator_core_v2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+
 target_include_directories(simulator_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 if(MSVC)
@@ -21,10 +30,18 @@ if(MSVC)
     if(SIMULATOR_WARNINGS_AS_ERRORS)
         target_compile_options(simulator_core PRIVATE /WX)
     endif()
+    target_compile_options(simulator_core_v2 PRIVATE /W4 /permissive-)
+    if(SIMULATOR_WARNINGS_AS_ERRORS)
+        target_compile_options(simulator_core_v2 PRIVATE /WX)
+    endif()
 else()
     target_compile_options(simulator_core PRIVATE -Wall -Wextra -Wpedantic)
     if(SIMULATOR_WARNINGS_AS_ERRORS)
         target_compile_options(simulator_core PRIVATE -Werror)
+    endif()
+    target_compile_options(simulator_core_v2 PRIVATE -Wall -Wextra -Wpedantic)
+    if(SIMULATOR_WARNINGS_AS_ERRORS)
+        target_compile_options(simulator_core_v2 PRIVATE -Werror)
     endif()
 endif()
 
