@@ -3,7 +3,6 @@
 #include "contracts/Proceso.h"
 #include "scheduler/Scheduler.h"
 
-#include <cstdint>
 #include <vector>
 
 // Unico punto del modulo concurrente que conoce el Scheduler compartido
@@ -24,9 +23,6 @@ public:
 
     // Preparacion de un proceso al recibir el CPU.
     void alAsignarCPU(Proceso& proceso) const;
-
-    // v1 heredado: DP-10 retira el aging en v2.
-    void aplicarAging(std::vector<Proceso>& procesos, std::int64_t delta) const;
 
 private:
     Scheduler scheduler_;

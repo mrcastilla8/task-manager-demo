@@ -13,8 +13,3 @@ std::vector<int> PlanificadorMotor::ordenarCola(
 void PlanificadorMotor::alAsignarCPU(Proceso& proceso) const {
     scheduler_.alAsignarCPU(proceso);
 }
-
-void PlanificadorMotor::aplicarAging(std::vector<Proceso>& procesos,
-                                     std::int64_t delta) const {
-    scheduler_.aplicarAging(procesos, delta);
-}

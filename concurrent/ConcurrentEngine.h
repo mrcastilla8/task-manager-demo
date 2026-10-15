@@ -92,7 +92,7 @@ private:
     bool todosTerminadosInterno() const;
     void actualizarColaPrioridadInterno();
     void avanzarEsperasIOInterno(std::int64_t delta);
-    void aplicarAgingAListosInterno(std::int64_t delta);
+    void acumularEsperaListosInterno(std::int64_t delta);
 
     mutable std::mutex mutexEstado_;
     std::condition_variable cvCoordinador_;

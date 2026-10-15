@@ -84,9 +84,9 @@ int main() {
         EXPECT_TRUE(tiposDeEventos(s, 1) == esperados);
     }
 
-    // Caso 2 (heredado de v1; DP-10 retira el aging en v2): aging eleva a un
-    // proceso de baja prioridad hasta igualar al dominante, y la cola READY del
-    // snapshot nunca incluye al proceso en RUN.
+    // Caso 2 (DP-10): sin aging. La espera no cambia la prioridad, aunque un
+    // proceso de baja prioridad espere mucho tiempo. Solo se acumula como metrica.
+    // La cola READY del snapshot nunca incluye al proceso en RUN.
     {
         ConcurrentEngine engine(2048);
         engine.configurarQuantum(500);
@@ -101,41 +101,42 @@ int main() {
         engine.agregarProceso(b);
         engine.pausar();
 
-        bool bEjecuto = false;
-        for (int paso = 0; paso < 100 && !bEjecuto; ++paso) {
+        // 30 turnos (15,000 ms): B espera todo el tiempo sin recibir CPU.
+        for (int paso = 0; paso < 30; ++paso) {
             engine.siguientePaso();
-            const EstadoSistema s = engine.obtenerEstado();
-            bEjecuto = std::any_of(
-                s.timeline.begin(), s.timeline.end(),
-                [](const BloqueTimeline& bloque) { return bloque.pid == 2; });
         }
-        EXPECT_TRUE(bEjecuto);
+        EstadoSistema s = engine.obtenerEstado();
+        EXPECT_EQ(s.tiempoSimulado, 15000);
+        EXPECT_EQ(buscarProceso(s, 2)->prioridadActual, 3);
+        EXPECT_EQ(buscarProceso(s, 2)->tiempoEspera, 15000);
+        EXPECT_EQ(buscarProceso(s, 2)->estado, Estado::READY);
+        const auto cambiosPrioridad = std::count_if(
+            s.eventos.begin(), s.eventos.end(), [](const Evento& e) {
+                return e.tipo == TipoEvento::PRIORITY_CHANGED;
+            });
+        EXPECT_EQ(cambiosPrioridad, 0);
+        for (const auto& bloque : s.timeline) {
+            EXPECT_EQ(bloque.pid, 1);  // B nunca recibio CPU
+        }
+        EXPECT_EQ(s.pidEjecutando, -1);
+        for (int pid : s.colaPrioridad) {
+            EXPECT_EQ(buscarProceso(s, pid)->estado, Estado::READY);
+        }
 
-        const EstadoSistema s = engine.obtenerEstado();
+        // Cuando A termina, B por fin recibe CPU.
+        while (engine.obtenerEstado().estadoEjecucion !=
+               EstadoEjecucion::FINALIZADO) {
+            engine.siguientePaso();
+        }
+        s = engine.obtenerEstado();
         const auto bloqueB = std::find_if(
             s.timeline.begin(), s.timeline.end(),
             [](const BloqueTimeline& bloque) { return bloque.pid == 2; });
         EXPECT_TRUE(bloqueB != s.timeline.end());
         if (bloqueB != s.timeline.end()) {
-            // B espera 5 intervalos de 2,000 ms: 3 -> 8 iguala a A; B gana el
-            // empate por tener un ticket mas antiguo (A reingreso tras cada cuota).
-            EXPECT_EQ(bloqueB->inicio, 10000);
+            EXPECT_EQ(bloqueB->inicio, 20000);
         }
-
-        const auto cambiosB = std::count_if(
-            s.eventos.begin(), s.eventos.end(), [](const Evento& e) {
-                return e.pid == 2 && e.tipo == TipoEvento::PRIORITY_CHANGED;
-            });
-        EXPECT_EQ(cambiosB, 5);
-
-        // Al recibir CPU recupera su prioridad base y sin espera acumulada.
-        EXPECT_EQ(buscarProceso(s, 2)->prioridadActual, 3);
-        EXPECT_EQ(buscarProceso(s, 2)->tiempoEspera, 0);
-
-        EXPECT_EQ(s.pidEjecutando, -1);
-        for (int pid : s.colaPrioridad) {
-            EXPECT_EQ(buscarProceso(s, pid)->estado, Estado::READY);
-        }
+        EXPECT_EQ(buscarProceso(s, 2)->estado, Estado::FINISH);
     }
 
     // Caso 3: ejecucion continua hasta FINALIZADO sin intervencion manual.

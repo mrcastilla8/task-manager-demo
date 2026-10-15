@@ -438,7 +438,7 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         tiempoSimulado_ += delta;
 
         avanzarEsperasIOInterno(delta);
-        aplicarAgingAListosInterno(delta);
+        acumularEsperaListosInterno(delta);
     }
 
     // Resolucion de transicion de fin de rafaga
@@ -558,26 +558,15 @@ void ConcurrentEngine::avanzarEsperasIOInterno(std::int64_t delta) {
     }
 }
 
-void ConcurrentEngine::aplicarAgingAListosInterno(std::int64_t delta) {
-    std::vector<Proceso> listos = colaProcesos_.obtenerPorEstado(Estado::READY);
-    std::vector<int> prioridadesPrevias;
-    prioridadesPrevias.reserve(listos.size());
-    for (const auto& listo : listos) {
-        prioridadesPrevias.push_back(listo.prioridadActual);
-    }
-
-    planificador_.aplicarAging(listos, delta);
-
-    for (std::size_t i = 0; i < listos.size(); ++i) {
-        Proceso* original = colaProcesos_.buscar(listos[i].pid);
-        if (original == nullptr) {
-            continue;
-        }
-        original->tiempoEspera = listos[i].tiempoEspera;
-        if (listos[i].prioridadActual != prioridadesPrevias[i]) {
-            original->prioridadActual = listos[i].prioridadActual;
-            registrarEventoInterno(TipoEvento::PRIORITY_CHANGED, listos[i].pid,
-                                   "Prioridad incrementada por aging");
+void ConcurrentEngine::acumularEsperaListosInterno(std::int64_t delta) {
+    // DP-10: no hay aging. El tiempo de espera es solo una metrica y no modifica
+    // la prioridad. Consecuencia aceptada (propuesta tecnica 8): un proceso de
+    // baja prioridad puede esperar indefinidamente mientras haya READY de mayor
+    // prioridad.
+    for (const auto& listo : colaProcesos_.obtenerPorEstado(Estado::READY)) {
+        Proceso* proceso = colaProcesos_.buscar(listo.pid);
+        if (proceso != nullptr) {
+            proceso->tiempoEspera += delta;
         }
     }
 }
