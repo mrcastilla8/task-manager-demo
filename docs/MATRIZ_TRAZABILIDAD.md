@@ -32,6 +32,7 @@ La columna “criterio” describe evidencia documental verificable para cerrar 
 | DP-10 | Aging 2,000 ms vs recálculo por tamaño | Política equipo vs transcripción 12:07–14:22, `PENDIENTE_CONFIRMACION` | Scheduler, especificación, decisiones, casos | `Scheduler.cpp`, `Configuracion.h` | Ambos mecanismos descritos, relación pendiente | Aging no se elimina y las diferencias se explican |
 | DP-11 | Evidencia de deliberación previa: documento Poma recomendaba Qt 6; dos motores e interfaz común en discusión | Documento Poma y ramas examinadas al preparar matriz histórica | README, GUI, decisiones | En esa instantánea no había GUI Qt ni motor lógico integrado | **Estado histórico previo al cierre**; DP-11a/b aprueban Qt 6 y ambos motores para destino v2 (ver tabla de 19 respuestas) | No atribuir la elección al docente; distinguir estado histórico de implementación actual |
 | API-01 | Contratos comunes congelados en v1.0 | `contracts/README.md`, `DECISION_EQUIPO` | Todas las asignaciones y especificación | `contracts/*.h` | Vigente y preservado | Ningún encabezado cambia; cambios futuros se proponen como nueva versión |
+| ARCH-01 | Dependencias, ownership, duplicaciones, pruebas declaradas y secuencia de integración de módulos v2 | `DECISION_EQUIPO`; `docs/WORKFLOW_DESARROLLO.md` fases/G1–G6 y `docs/DECISIONES_APROBADAS.md` DP-01–DP-11 | Matriz de integración, workflow, contratos y casos | `CMakeLists.txt`, `tests/CMakeLists.txt`, `core/v2/`, `scheduler/`, `simulation/`, `concurrent/`, `gui/` | Ramas auditadas; módulos no integrados a `master`; pruebas transversales ausentes al corte | [Matriz de integración v2](MATRIZ_INTEGRACION_V2.md) registra HEAD/PR, interfaz/dependencias, evidencia y gates; actualizar con cada integración y resultados ejecutados |
 
 ## Trazabilidad de las 19 respuestas aprobadas v2
 
@@ -60,3 +61,7 @@ Cada fila es una respuesta del cuestionario formalizada. La columna v1 documenta
 | DP-11b | Motores lógico/concurrente comparten Scheduler/interfaz; GUI sin planning; un CPU lógico | [DP-11](DECISIONES_APROBADAS.md#dp-11--interfaz-y-motores) | Concurrente existente en rama; lógico ausente al auditar | Aprobada; falta integración | Mock y ambos motores coinciden en mismas trazas |
 
 La presencia de headers solo cubre diseño candidato; no acredita implementación, pruebas de módulos ni integración. Las decisiones de driver continuo, política de errores, cancelación parcial y secuencia de eventos tienen matriz de propuestas en [Propuestas técnicas v2](PROPUESTAS_TECNICAS_V2.md).
+
+## Auditoría de integración remota 2026-10-15
+
+La relación actual entre ramas, interfaces, dependencias CMake, pruebas declaradas y gates técnicos queda registrada en la [Matriz de integración v2](MATRIZ_INTEGRACION_V2.md). El documento identifica cada SHA del corte remoto, PR abierto, estado de integración y evidencia reproducible declarada; no atribuye integración al hecho de que los archivos existan. El criterio para cerrar ARCH-01 es actualizar la matriz tras cada gate Core → Scheduler → motores → GUI y enlazar los resultados ejecutados, preservando v1.0 y las decisiones DP-01–DP-11 aprobadas.
