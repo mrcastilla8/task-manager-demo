@@ -47,11 +47,12 @@ ctest --test-dir build-integracion -C Debug --output-on-failure -j 2
 La vista previa sirve para revisar widgets, pero no admite procesos. El inicio
 continuo permanece deshabilitado porque su driver todavía requiere ratificación.
 La cancelación parcial durante RUN también está pendiente; no se usa tiempo
-físico ni checkpoints artificiales para aproximarla. El motor concurrente
-actual conserva el coordinador y workers, pero todavía delega la transición al
-motor lógico después de calcular el turno. La revisión de Ángel debe hacer que
-el resultado validado del worker autorice la transición antes de afirmar que
-participa efectivamente en la ejecución.
+físico ni checkpoints artificiales para aproximarla. El motor concurrente de
+Ángel es independiente de `SimulationEngineV2`: lee/escribe Core v2, solicita
+prioridades/selección/tickets al Scheduler compartido y ejecuta cada ráfaga en
+un worker real. El coordinador valida PID, duración y motivo del worker antes de
+aplicar la transición; un fallo de aplicación restaura la imagen previa del
+turno. La comparación con Aldana se basa en snapshots y trazas observables.
 
 `EngineSession` procesa todas las operaciones y snapshots en un hilo dedicado;
 los callbacks regresan al hilo Qt. Al cambiar de sesión o cerrar la ventana,
@@ -64,9 +65,9 @@ El build base ejecuta `test_core_scheduler_integracion`,
 `test_v2_motor_integracion`, `test_simulation_atomicidad` y
 `test_concurrent_v2_equivalencia`. La opción Qt añade pruebas de modelos y
 ventana en modo `offscreen`. En Windows, Qt 6.8.3 MinGW x64 con MinGW 13.1.0 y
-CMake 4.4.3 configuró y compiló con warnings-as-errors; `test_gui` y
-`test_gui_models` pasaron 2/2, y la suite completa pasó 29/29. El build base
-pasó 27/27. `test_gui` opera la ventana real con ambos motores, incluida E/S,
+CMake 4.4.3 configuró y compiló con warnings-as-errors; pruebas concurrentes
+9/9, GUI `test_gui` y `test_gui_models` 2/2, y suite completa 37/37. El build
+base sin la GUI Qt pasó 27/27. `test_gui` opera la ventana real con ambos motores, incluida E/S,
 WAIT/READY, cambio de motor durante un paso y snapshots; el ejecutable también
-inició y mantuvo su loop con `QT_QPA_PLATFORM=offscreen`. El motor concurrente
-sigue pendiente de la revisión de autoridad del worker por Ángel.
+inició y mantuvo su loop con `QT_QPA_PLATFORM=offscreen`. La suite concurrente
+incluye comparación determinista y fuzz reproducible contra el motor lógico.
