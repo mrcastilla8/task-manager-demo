@@ -50,13 +50,19 @@ La GUI depende únicamente de `IExecutionEngine` y snapshots `EstadoSistema`; no
 
 ## Responsabilidades y rutas
 
-| Integrante | Entregables principales | Límites |
-|---|---|---|
-| 1. Modelo y memoria | `contracts/`; `core/ColaProcesos.h/.cpp`; `core/Memoria.h/.cpp`; pruebas de proceso, cola y memoria | No implementa scheduler, threads ni GUI |
-| 2. Scheduler | `scheduler/Scheduler.h/.cpp`; `scheduler/SchedulerConfig.h`; pruebas de prioridad, empate y aging | No implementa GUI, threads ni timers visuales |
-| 3. Motor lógico | `simulation/SimulationEngine.h/.cpp`; `simulation/SimulationClock.h/.cpp`; cinco pruebas de simulación | No implementa GUI, workers ni política propia de prioridad |
-| 4. Motor concurrente | `concurrent/ConcurrentEngine.h/.cpp`; `ProcessThread.h/.cpp`; `Synchronization.h`; cinco pruebas concurrentes | No duplica Scheduler ni actualiza Qt |
-| 5. GUI e integración | `gui/MainWindow.*`, tabla, cola, CPU, memoria, timeline, log y diálogo de alta; `main.cpp` | No decide política de scheduling ni sincroniza internamente los workers |
+| Integrante | Responsable | Rama de trabajo | Entregables principales | Límites |
+|---|---|---|---|---|
+| 1. Modelo y memoria | Castilla | `castilla` | `contracts/`; `core/ColaProcesos.h/.cpp`; `core/Memoria.h/.cpp`; pruebas de proceso, cola y memoria | No implementa scheduler, threads ni GUI |
+| 2. Scheduler | Brickzon | `brickzon` | `scheduler/Scheduler.h/.cpp`; `scheduler/SchedulerConfig.h`; pruebas de prioridad, empate y aging | No implementa GUI, threads ni timers visuales |
+| 3. Motor lógico | Aldana | `aldana` | `simulation/SimulationEngine.h/.cpp`; `simulation/SimulationClock.h/.cpp`; cinco pruebas de simulación | No implementa GUI, workers ni política propia de prioridad |
+| 4. Motor concurrente | Ángel | `angel` | `concurrent/ConcurrentEngine.h/.cpp`; `ProcessThread.h/.cpp`; `Synchronization.h`; cinco pruebas concurrentes | No duplica Scheduler ni actualiza Qt |
+| 5. GUI e integración | Poma | `poma` | `gui/MainWindow.*`, tabla, cola, CPU, memoria, timeline, log y diálogo de alta; `main.cpp` | No decide política de scheduling ni sincroniza internamente los workers |
+
+Las ramas identifican espacios de trabajo, no usuarios personales de GitHub. El [workflow canónico](docs/WORKFLOW_DESARROLLO.md) explica fases, dependencias, trabajo paralelo, gates y PRs. Esta tabla indica ownership funcional; no certifica que los entregables estén implementados o probados.
+
+## Workflow de desarrollo
+
+Resuelve primero las decisiones que bloquean reglas compartidas, completa modelo y Scheduler, desarrolla ambos motores en paralelo cuando contratos y política estén estables, y permite que GUI avance temprano con un mock. Consulta [docs/WORKFLOW_DESARROLLO.md](docs/WORKFLOW_DESARROLLO.md) para el proceso completo de implementación, integración, validación y demostración.
 
 Los contratos v1.0 y sus unidades/errores prevalecen sobre snippets antiguos. Si una firma de la asignación discrepa, enlaza el encabezado actual y registra la necesidad como migración pendiente en lugar de publicar otra API.
 

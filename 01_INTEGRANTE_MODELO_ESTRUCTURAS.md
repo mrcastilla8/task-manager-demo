@@ -1,5 +1,7 @@
 # Integrante 1 — Modelo, estructuras de datos y memoria
 
+**Responsable:** Castilla · **Rama:** `castilla` · **Workflow:** [fase 1](docs/WORKFLOW_DESARROLLO.md#fase-1--modelo-estructuras-de-datos-y-memoria)
+
 Esta asignación conserva el alcance de `master`/`castilla` y devuelve las rutas, las operaciones esperadas y los escenarios originales. Para interfaces exactas, los encabezados actuales de `contracts/` y `core/` son normativos; ejemplos antiguos que no coinciden con ellos no deben copiarse.
 
 ## Objetivo y responsabilidades

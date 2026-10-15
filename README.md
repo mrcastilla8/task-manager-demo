@@ -10,7 +10,7 @@ ConcurrentSimulator es un proyecto C++17 para simular gráficamente la admisión
 4. [Decisiones pendientes](docs/DECISIONES_PENDIENTES.md)
 5. [Contratos versión 1.0](contracts/README.md)
 
-La [matriz de trazabilidad](docs/MATRIZ_TRAZABILIDAD.md) y los [casos de referencia](docs/CASOS_REFERENCIA.md) concentran la relación entre reglas, documentación, código y criterios verificables. Cada integrante debe leer además su asignación: [modelo y memoria](01_INTEGRANTE_MODELO_ESTRUCTURAS.md), [scheduler](02_INTEGRANTE_SCHEDULER.md), [motor lógico](03_INTEGRANTE_SIMULACION_LOGICA.md), [motor concurrente](04_INTEGRANTE_MOTOR_CONCURRENTE.md) o [GUI e integración](05_INTEGRANTE_GUI_INTEGRACION.md). Las reglas para agentes están en [AGENTS.md](AGENTS.md).
+La [matriz de trazabilidad](docs/MATRIZ_TRAZABILIDAD.md) y los [casos de referencia](docs/CASOS_REFERENCIA.md) concentran la relación entre reglas, documentación, código y criterios verificables. Los [responsables y ramas](00_INDICACIONES_GENERALES_PROYECTO.md#responsabilidades-y-rutas) están formalizados en la guía general y el proceso completo de fases, dependencias, integración y PR está en [WORKFLOW_DESARROLLO.md](docs/WORKFLOW_DESARROLLO.md). Cada integrante debe leer además su asignación: [modelo y memoria](01_INTEGRANTE_MODELO_ESTRUCTURAS.md), [scheduler](02_INTEGRANTE_SCHEDULER.md), [motor lógico](03_INTEGRANTE_SIMULACION_LOGICA.md), [motor concurrente](04_INTEGRANTE_MOTOR_CONCURRENTE.md) o [GUI e integración](05_INTEGRANTE_GUI_INTEGRACION.md). Las reglas para agentes están en [AGENTS.md](AGENTS.md).
 
 ## Etiquetas de evidencia
 

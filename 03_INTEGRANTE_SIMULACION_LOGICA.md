@@ -1,5 +1,7 @@
 # Integrante 3 — Motor de simulación lógica
 
+**Responsable:** Aldana · **Rama:** `aldana` · **Workflow:** [fase 3](docs/WORKFLOW_DESARROLLO.md#fase-3--motores-de-ejecucion)
+
 Asignación recuperada de `origin/aldana`. Este módulo es el motor de referencia sin threads reales: mantiene un reloj simulado y avanza procesos como objetos. La carpeta `simulation/` y su implementación aún no aparecen en las ramas revisadas; las rutas abajo son entregables previstos, no archivos ya existentes.
 
 ## Contrato y responsabilidades

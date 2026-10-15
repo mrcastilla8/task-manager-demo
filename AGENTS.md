@@ -24,11 +24,13 @@ No inventes reglas para llenar vacíos. Si una decisión impide continuar, compl
 
 ## Responsabilidades de integrantes
 
-- **01 Modelo, estructuras y memoria:** `contracts/`, `core/ColaProcesos.*`, `core/Memoria.*`; no define scheduling ni GUI.
-- **02 Scheduler:** `scheduler/`; selecciona y ordena READY conforme a la política aprobada; no duplica la política en motores.
-- **03 Motor lógico:** `simulation/`; reloj/eventos/transiciones sin threads reales; debe compartir semántica con el concurrente.
-- **04 Motor concurrente:** `concurrent/`; coordinación de workers reales y sincronización, con un solo CPU lógico simulado.
-- **05 GUI e integración:** `gui/` y punto de entrada; representa snapshots/eventos, no decide scheduler. Qt 6 es recomendación hasta ratificación.
+- **01 Castilla — Modelo, estructuras y memoria** (rama `castilla`): ownership de `contracts/`, `core/ColaProcesos.*`, `core/Memoria.*` y pruebas del módulo. No define scheduling ni GUI.
+- **02 Brickzon — Scheduler y planificación** (rama `brickzon`): ownership de `scheduler/` y pruebas del módulo; selecciona y ordena READY conforme a la política aprobada; no duplica la política en motores.
+- **03 Aldana — Motor lógico** (rama `aldana`): ownership de `simulation/` y sus pruebas; reloj/eventos/transiciones sin threads reales; comparte semántica con el concurrente.
+- **04 Ángel — Motor concurrente** (rama `angel`): ownership de `concurrent/` y sus pruebas; coordinación de workers reales y sincronización, con un solo CPU lógico simulado.
+- **05 Poma — GUI e integración** (rama `poma`): ownership de `gui/`, punto de entrada y pruebas de integración visual; representa snapshots/eventos, no decide scheduler. Qt 6 es recomendación hasta ratificación.
+
+El [workflow canónico](docs/WORKFLOW_DESARROLLO.md) define fases, dependencias, paralelismo, gates, PRs y validación. Los nombres de rama identifican espacios de trabajo, no identidades personales de GitHub. Los cambios que afecten varios módulos se coordinan con sus responsables; nadie cambia contratos compartidos unilateralmente.
 
 Los cinco documentos individuales describen los entregables y límites, pero la especificación canónica y los contratos determinan precedencia.
 

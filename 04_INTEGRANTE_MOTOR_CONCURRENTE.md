@@ -1,5 +1,7 @@
 # Integrante 4 — Motor concurrente con threads reales
 
+**Responsable:** Ángel · **Rama:** `angel` · **Workflow:** [fase 3](docs/WORKFLOW_DESARROLLO.md#fase-3--motores-de-ejecucion)
+
 Asignación recuperada de `origin/angel`. Se restituye el detalle de workers, coordinación, sincronización, cierre y pruebas, conservando que los hilos reales implementan un solo CPU lógico simulado.
 
 ## Objetivo y principio de operación

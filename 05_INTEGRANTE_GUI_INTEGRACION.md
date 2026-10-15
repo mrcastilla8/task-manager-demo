@@ -1,5 +1,7 @@
 # Integrante 5 — GUI, visualización e integración
 
+**Responsable:** Poma · **Rama:** `poma` · **Workflow:** [fase 4](docs/WORKFLOW_DESARROLLO.md#fase-4--gui-y-visualizacion)
+
 Asignación recuperada de `origin/poma`. Qt 6 + C++ se conserva como **recomendación del equipo**, no requisito del docente ni toolkit aprobado. La GUI debe poder empezar con un mock mientras los motores avanzan.
 
 ## Principio de diseño y dependencias
