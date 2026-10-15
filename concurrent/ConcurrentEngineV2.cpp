@@ -1,6 +1,7 @@
 #include "concurrent/ConcurrentEngineV2.h"
 
 #include <algorithm>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 
@@ -273,6 +274,20 @@ void ConcurrentEngineV2::configurarFalloAltaPruebas(EtapaAlta etapa) {
     falloAltaPruebas_ = etapa;
 }
 
+void ConcurrentEngineV2::configurarFalloPasoPruebas(EtapaPasoPrueba etapa) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    falloPasoPruebas_ = etapa;
+}
+
+void ConcurrentEngineV2::forzarMotivoWorkerPruebas(MotivoFinTurno motivo) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (pidEjecutando_ < 0) return;
+    const auto it = workers_.find(pidEjecutando_);
+    if (it != workers_.end() && it->second != nullptr) {
+        it->second->forzarMotivoProximoTurnoPruebas(motivo);
+    }
+}
+
 void ConcurrentEngineV2::fijarSiguienteTicketPruebas(std::uint64_t valor) {
     std::lock_guard<std::mutex> lock(mutex_);
     asignadorTickets_.reiniciar(valor);
@@ -281,6 +296,13 @@ void ConcurrentEngineV2::fijarSiguienteTicketPruebas(std::uint64_t valor) {
 void ConcurrentEngineV2::inyectarFalloAlta(EtapaAlta etapa) const {
     if (falloAltaPruebas_ == etapa) {
         throw std::runtime_error("Fallo inyectado en el alta (solo pruebas)");
+    }
+}
+
+void ConcurrentEngineV2::inyectarFalloPaso(EtapaPasoPrueba etapa) {
+    if (falloPasoPruebas_ == etapa) {
+        falloPasoPruebas_ = EtapaPasoPrueba::NINGUNA;
+        throw std::runtime_error("Fallo inyectado durante el paso (solo pruebas)");
     }
 }
 
@@ -323,7 +345,16 @@ void ConcurrentEngineV2::loopCoordinador() {
 
 void ConcurrentEngineV2::abortarTurnoInterno() noexcept {
     if (pidEjecutando_ >= 0) {
-        (void)procesos_.actualizarEstado(pidEjecutando_, Estado::READY);
+        const int pid = pidEjecutando_;
+        (void)procesos_.actualizarEstado(pid, Estado::READY);
+        const auto despacho = std::find_if(
+            eventos_.rbegin(), eventos_.rend(), [pid](const Evento& evento) {
+                return evento.tipo == TipoEvento::READY_A_RUN &&
+                       evento.pid == pid;
+            });
+        if (despacho != eventos_.rend()) {
+            eventos_.erase(std::next(despacho).base());
+        }
     }
     pidEjecutando_ = -1;
     cuotaTurnoFijadaMs_ = 0;
@@ -420,91 +451,142 @@ ResultadoPaso ConcurrentEngineV2::ejecutarPasoInterno(
     const ResultadoRafaga rafaga = worker->esperarFinTurno();
     lock.lock();
 
-    if (rafaga.pid != pid || rafaga.motivo == MotivoFinTurno::CANCELADO ||
+    const MotivoFinTurno motivoEsperado = terminaCPU
+        ? MotivoFinTurno::PROCESO_TERMINADO
+        : (terminaPorIO ? MotivoFinTurno::BLOQUEO_IO
+                        : MotivoFinTurno::QUANTUM_AGOTADO);
+    // CANCELADO no es un resultado válido del turno calculado: la cancelación
+    // RUN provisional se decide al cerrar la ráfaga, no con checkpoints.
+    if (rafaga.pid != pid || rafaga.motivo != motivoEsperado ||
         rafaga.tiempoEjecutadoMs != duracion) {
         abortarTurnoInterno();
         return PASO_INVALIDO;
     }
 
-    // Se aplica la rafaga por segmentos para despertar a los procesos en WAIT en
-    // el instante exacto en que vencen.
-    std::int64_t pendiente = duracion;
-    while (pendiente > 0) {
-        std::int64_t segmento = pendiente;
-        for (const Espera& espera : esperas_) {
-            if (espera.despertarMs > relojMs_) {
-                segmento = (std::min)(segmento, espera.despertarMs - relojMs_);
+    // Captura bajo mutex después de recoger el worker. Conserva altas y
+    // cancelaciones aceptadas mientras aquel calculaba la ráfaga.
+    ListaProcesos procesosAntes = procesos_;
+    Memoria memoriaAntes = memoria_;
+    AsignadorTickets ticketsAntes = asignadorTickets_;
+    const std::int64_t relojAntes = relojMs_;
+    const EstadoEjecucion estadoAntes = estado_;
+    const int pidEjecutandoAntes = pidEjecutando_;
+    const std::int64_t cuotaAntes = cuotaTurnoFijadaMs_;
+    const std::int64_t cpuTurnoAntes = cpuConsumidaTurnoMs_;
+    std::vector<Espera> esperasAntes = esperas_;
+    std::unordered_set<int> ioConsumidaAntes = ioConsumida_;
+    std::unordered_set<int> cancelacionesAntes = cancelacionesPendientes_;
+    const std::size_t cantidadEventosAntes = eventos_.size();
+    const std::size_t cantidadBloquesAntes = timeline_.size();
+    bool retirarWorker = false;
+
+    try {
+        // Se aplica la rafaga por segmentos para despertar a los procesos en WAIT
+        // en el instante exacto en que vencen.
+        std::int64_t pendiente = duracion;
+        while (pendiente > 0) {
+            std::int64_t segmento = pendiente;
+            for (const Espera& espera : esperas_) {
+                if (espera.despertarMs > relojMs_) {
+                    segmento = (std::min)(segmento,
+                                          espera.despertarMs - relojMs_);
+                }
+            }
+            const Proceso* actual = procesos_.buscar(pid);
+            if (actual == nullptr || segmento <= 0 ||
+                !puedeAvanzarRelojInterno(segmento) ||
+                !procesos_.actualizarCpu(
+                    pid, actual->tiempoCpuConsumidoMs + segmento,
+                    actual->tiempoCpuRestanteMs - segmento)) {
+                throw std::logic_error("No se pudo aplicar un segmento validado");
+            }
+            relojMs_ += segmento;
+            cpuConsumidaTurnoMs_ += segmento;
+            pendiente -= segmento;
+
+            for (const Proceso& otro : procesos_.obtenerTodos()) {
+                if (otro.estado == Estado::READY && otro.pid != pid) {
+                    (void)procesos_.actualizarTiempoEspera(
+                        otro.pid, sumaSaturada(otro.tiempoEsperaMs, segmento));
+                }
+            }
+            registrarInterno(TipoEvento::CPU_EJECUTADA, pid, segmento);
+            if (!despertarEsperasVencidasInterno()) {
+                throw std::logic_error(
+                    "Falló un despertar prevalidado del turno");
+            }
+            inyectarFalloPaso(EtapaPasoPrueba::TRAS_SEGMENTO);
+        }
+
+        timeline_.emplace_back(pid, inicio, relojMs_);
+
+        // Transición de fin de ráfaga.
+        const Proceso* tras = procesos_.buscar(pid);
+        if (tras == nullptr) {
+            throw std::logic_error(
+                "El proceso RUN desapareció al cerrar el turno");
+        }
+        if (tras->tiempoCpuRestanteMs == 0) {
+            (void)procesos_.actualizarEstado(pid, Estado::FINISH);
+            liberarMemoriaInterno(pid);
+            registrarInterno(TipoEvento::RUN_A_FINISH, pid);
+            reclasificarInterno();
+            retirarWorker = true;
+        } else if (ioPendiente &&
+                   tras->tiempoCpuConsumidoMs ==
+                       tras->operacionIO.despuesDeCpuMs) {
+            esperas_.push_back(
+                {pid, sumaSaturada(relojMs_,
+                                  tras->operacionIO.duracionEsperaMs)});
+            ioConsumida_.insert(pid);
+            (void)procesos_.actualizarEstado(pid, Estado::WAIT);
+            registrarInterno(TipoEvento::RUN_A_WAIT, pid);
+        } else {
+            (void)procesos_.actualizarTicketReady(pid,
+                                                 asignadorTickets_.asignar());
+            (void)procesos_.actualizarEstado(pid, Estado::READY);
+            registrarInterno(TipoEvento::CUOTA_AGOTADA, pid);
+            registrarInterno(TipoEvento::RUN_A_READY, pid);
+        }
+
+        pidEjecutando_ = -1;
+        cuotaTurnoFijadaMs_ = 0;
+        cpuConsumidaTurnoMs_ = 0;
+
+        // La cancelación RUN sigue el protocolo provisional: se aplica al
+        // completar la ráfaga, después de resolver FINISH/WAIT/READY.
+        if (cancelacionesPendientes_.erase(pid) > 0) {
+            const Proceso* despues = procesos_.buscar(pid);
+            if (despues != nullptr && despues->estado != Estado::FINISH &&
+                despues->estado != Estado::CANCEL) {
+                cancelarInterno(pid, false);
+                retirarWorker = true;
             }
         }
-        const Proceso* actual = procesos_.buscar(pid);
-        if (actual == nullptr || segmento <= 0 ||
-            !puedeAvanzarRelojInterno(segmento) ||
-            !procesos_.actualizarCpu(pid,
-                                     actual->tiempoCpuConsumidoMs + segmento,
-                                     actual->tiempoCpuRestanteMs - segmento)) {
-            abortarTurnoInterno();
-            return PASO_INVALIDO;
-        }
-        relojMs_ += segmento;
-        cpuConsumidaTurnoMs_ += segmento;
-        pendiente -= segmento;
 
-        for (const Proceso& otro : procesos_.obtenerTodos()) {
-            if (otro.estado == Estado::READY && otro.pid != pid) {
-                (void)procesos_.actualizarTiempoEspera(
-                    otro.pid, sumaSaturada(otro.tiempoEsperaMs, segmento));
-            }
-        }
-        registrarInterno(TipoEvento::CPU_EJECUTADA, pid, segmento);
-        if (!despertarEsperasVencidasInterno()) {
-            abortarTurnoInterno();
-            return PASO_INVALIDO;
-        }
+        finalizarSiCorrespondeInterno();
+    } catch (...) {
+        procesos_ = std::move(procesosAntes);
+        memoria_ = std::move(memoriaAntes);
+        asignadorTickets_ = ticketsAntes;
+        relojMs_ = relojAntes;
+        estado_ = estadoAntes;
+        pidEjecutando_ = pidEjecutandoAntes;
+        cuotaTurnoFijadaMs_ = cuotaAntes;
+        cpuConsumidaTurnoMs_ = cpuTurnoAntes;
+        esperas_ = std::move(esperasAntes);
+        ioConsumida_ = std::move(ioConsumidaAntes);
+        cancelacionesPendientes_ = std::move(cancelacionesAntes);
+        eventos_.erase(eventos_.begin() + cantidadEventosAntes,
+                       eventos_.end());
+        timeline_.erase(timeline_.begin() + cantidadBloquesAntes,
+                        timeline_.end());
+        throw;
     }
 
-    timeline_.emplace_back(pid, inicio, relojMs_);
-
-    // Transicion de fin de rafaga.
-    const Proceso* tras = procesos_.buscar(pid);
-    if (tras == nullptr) {
-        abortarTurnoInterno();
-        return PASO_INVALIDO;
-    }
-    if (tras->tiempoCpuRestanteMs == 0) {
-        (void)procesos_.actualizarEstado(pid, Estado::FINISH);
-        liberarMemoriaInterno(pid);
-        registrarInterno(TipoEvento::RUN_A_FINISH, pid);
-        reclasificarInterno();
+    if (retirarWorker) {
         retirarWorkerInterno(pid);
-    } else if (ioPendiente &&
-               tras->tiempoCpuConsumidoMs == tras->operacionIO.despuesDeCpuMs) {
-        esperas_.push_back(
-            {pid, sumaSaturada(relojMs_, tras->operacionIO.duracionEsperaMs)});
-        ioConsumida_.insert(pid);
-        (void)procesos_.actualizarEstado(pid, Estado::WAIT);
-        registrarInterno(TipoEvento::RUN_A_WAIT, pid);
-    } else {
-        (void)procesos_.actualizarTicketReady(pid, asignadorTickets_.asignar());
-        (void)procesos_.actualizarEstado(pid, Estado::READY);
-        registrarInterno(TipoEvento::CUOTA_AGOTADA, pid);
-        registrarInterno(TipoEvento::RUN_A_READY, pid);
     }
-
-    pidEjecutando_ = -1;
-    cuotaTurnoFijadaMs_ = 0;
-    cpuConsumidaTurnoMs_ = 0;
-
-    // Cancelacion solicitada durante la rafaga: se aplica sobre el estado ya
-    // resuelto. Si el proceso termino (FINISH) en este mismo limite, FINISH gana.
-    if (cancelacionesPendientes_.erase(pid) > 0) {
-        const Proceso* despues = procesos_.buscar(pid);
-        if (despues != nullptr && despues->estado != Estado::FINISH &&
-            despues->estado != Estado::CANCEL) {
-            cancelarInterno(pid);
-        }
-    }
-
-    finalizarSiCorrespondeInterno();
     return {CodigoResultado::OK, true, true, duracion};
 }
 
@@ -585,7 +667,7 @@ bool ConcurrentEngineV2::despertarEsperasVencidasInterno() {
     return true;
 }
 
-void ConcurrentEngineV2::cancelarInterno(int pid) {
+void ConcurrentEngineV2::cancelarInterno(int pid, bool retirarWorker) {
     (void)procesos_.actualizarEstado(pid, Estado::CANCEL);
     esperas_.erase(std::remove_if(esperas_.begin(), esperas_.end(),
                                   [pid](const Espera& espera) {
@@ -596,7 +678,9 @@ void ConcurrentEngineV2::cancelarInterno(int pid) {
     liberarMemoriaInterno(pid);
     registrarInterno(TipoEvento::PROCESO_CANCELADO, pid);
     reclasificarInterno();
-    retirarWorkerInterno(pid);
+    if (retirarWorker) {
+        retirarWorkerInterno(pid);
+    }
     finalizarSiCorrespondeInterno();
 }
 

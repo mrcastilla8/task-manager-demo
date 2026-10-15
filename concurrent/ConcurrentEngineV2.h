@@ -31,6 +31,11 @@ enum class EtapaAlta {
     ASIGNAR_TICKET
 };
 
+enum class EtapaPasoPrueba {
+    NINGUNA,
+    TRAS_SEGMENTO
+};
+
 // Motor concurrente v2 (Integrante 4). Un CPU logico unico atendido por workers
 // reales: cada proceso admitido tiene un hilo que calcula su rafaga y un hilo
 // coordinador serializa los pasos. Usa directamente los modulos compartidos:
@@ -69,6 +74,8 @@ public:
     // Libera la rafaga del proceso en ejecucion; sin efecto si no hay ninguno.
     void liberarRafagaPruebas();
     void configurarFalloAltaPruebas(EtapaAlta etapa);
+    void configurarFalloPasoPruebas(EtapaPasoPrueba etapa);
+    void forzarMotivoWorkerPruebas(MotivoFinTurno motivo);
     void fijarSiguienteTicketPruebas(std::uint64_t valor);
 
 private:
@@ -88,7 +95,7 @@ private:
     ResultadoPaso ejecutarPasoInterno(std::unique_lock<std::mutex>& lock);
     ResultadoPaso ejecutarIdleInterno();
     bool despertarEsperasVencidasInterno();
-    void cancelarInterno(int pid);
+    void cancelarInterno(int pid, bool retirarWorker = true);
     void reclasificarInterno();
     void registrarInterno(TipoEvento tipo, int pid = -1,
                           std::int64_t duracionMs = 0);
@@ -101,6 +108,7 @@ private:
     std::uint64_t ticketsDisponiblesInterno() const noexcept;
     bool puedeAvanzarRelojInterno(std::int64_t duracionMs) const noexcept;
     void inyectarFalloAlta(EtapaAlta etapa) const;
+    void inyectarFalloPaso(EtapaPasoPrueba etapa);
 
     Configuracion configuracion_;
 
@@ -131,6 +139,7 @@ private:
 
     bool puertaActiva_{false};
     EtapaAlta falloAltaPruebas_{EtapaAlta::NINGUNA};
+    EtapaPasoPrueba falloPasoPruebas_{EtapaPasoPrueba::NINGUNA};
 
     // Debe ser el ultimo miembro: el hilo arranca al construirlo y lee los
     // demas miembros, que deben estar inicializados antes.

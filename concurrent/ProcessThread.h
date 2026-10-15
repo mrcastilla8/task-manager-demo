@@ -31,6 +31,8 @@ public:
     // Solo pruebas: libera una rafaga retenida por SolicitudTurno::esperarLiberacion.
     // Si se llama antes de que el worker llegue a la puerta, la libera igualmente.
     void liberarRafaga();
+    // Solo pruebas: sustituye el motivo del siguiente resultado de worker.
+    void forzarMotivoProximoTurnoPruebas(MotivoFinTurno motivo);
 
     bool estaDetenido() const noexcept;
 
@@ -46,6 +48,7 @@ private:
     bool turnoCompletado_{false};
     bool detener_{false};
     bool liberada_{false};
+    MotivoFinTurno motivoForzadoPruebas_{MotivoFinTurno::NINGUNO};
 
     SolicitudTurno solicitudActual_;
     ResultadoRafaga resultadoActual_;

@@ -67,6 +67,11 @@ void ProcessThread::liberarRafaga() {
     cvTurno_.notify_all();
 }
 
+void ProcessThread::forzarMotivoProximoTurnoPruebas(MotivoFinTurno motivo) {
+    std::lock_guard<std::mutex> lock(mutex_);
+    motivoForzadoPruebas_ = motivo;
+}
+
 bool ProcessThread::estaDetenido() const noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     return detener_;
@@ -112,6 +117,11 @@ void ProcessThread::ejecutarLoopWorker() {
         } else {
             resultado.tiempoEjecutadoMs = tiempoPorEjecutar;
             resultado.motivo = MotivoFinTurno::QUANTUM_AGOTADO;
+        }
+
+        if (motivoForzadoPruebas_ != MotivoFinTurno::NINGUNO) {
+            resultado.motivo = motivoForzadoPruebas_;
+            motivoForzadoPruebas_ = MotivoFinTurno::NINGUNO;
         }
 
         resultadoActual_ = resultado;
