@@ -22,6 +22,8 @@ enum class TipoEvento {
     SISTEMA_FINALIZADO
 };
 
+// Esquema candidato: orden total, timestamps iguales e interpretación de
+// duracionMs aún requieren ratificación técnica. No asumir replay normativo.
 struct Evento {
     std::int64_t tiempoSimuladoMs{0};
     TipoEvento tipo{TipoEvento::PROCESO_CREADO};

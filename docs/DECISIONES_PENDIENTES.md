@@ -120,10 +120,10 @@ Las alternativas y propuestas de esta lista no están aprobadas. Resolverlas req
 
 ## DP-11 — Toolkit de GUI y dos motores
 
-**Alternativas:** confirmar Qt 6; elegir otra biblioteca; mantener ambos motores de equipo; o simplificar a un motor si el equipo lo acuerda.
+**Alternativas históricas (cerradas por DP-11):** confirmar Qt 6; elegir otra biblioteca; mantener ambos motores de equipo; o simplificar a un motor. DP-11a/b ya seleccionan Qt 6 y dos motores con interfaz/Scheduler comunes para el destino v2.
 
-**Evidencia:** documento de Poma recomienda Qt 6; el código revisado no contiene GUI Qt ni motor lógico. La explicación docente describe CPU lógico por turnos y no obliga a usar hilos reales ni dos arquitecturas.
+**Evidencia registrada antes del cierre:** documento de Poma recomendaba Qt 6; el código revisado no contenía GUI Qt ni motor lógico. La explicación docente describe CPU lógico por turnos y no obliga a usar hilos reales ni dos arquitecturas. Esa distinción de procedencia se conserva, mientras la decisión del equipo ya está cerrada.
 
 **Impacto:** build, integración, plataforma, seguridad de GUI y costo de mantener equivalencia.
 
-**Propuesta para deliberar:** ratificar toolkit y alcance de dos motores en decisión explícita del equipo. Hasta entonces Qt es recomendación y los dos motores, arquitectura acordada de equipo.
+**Resultado actual:** DP-11 aprueba Qt 6 y dos motores de equipo para v2. Este documento solo conserva el historial de deliberación; sus antiguas alternativas no son pendientes.

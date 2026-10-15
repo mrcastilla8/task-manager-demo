@@ -15,7 +15,7 @@
 - `contracts/*.h` junto con `contracts/README.md` definen el contrato actualmente implementado y congelado en 1.0.
 - `docs/REQUISITOS_DOCENTE.md` es la referencia canónica de evidencia académica y sus páginas/minutos; no transforma ejemplos en reglas obligatorias.
 - `docs/ESPECIFICACION_FUNCIONAL.md` consolida la vista del sistema y distingue hechos, decisiones de equipo y preguntas abiertas.
-- `docs/DECISIONES_PENDIENTES.md` contiene reglas no aprobadas. No se deben usar sus propuestas como instrucciones normativas.
+- `docs/DECISIONES_PENDIENTES.md` conserva el historial de deliberación DP-01–DP-11, ya cerradas. No se deben usar sus alternativas históricas como tareas abiertas ni instrucciones normativas.
 - Cada regla debe identificarse como `CONFIRMADO_POR_DOCENTE`, `PROPUESTA_DOCENTE`, `DECISION_EQUIPO` o `PENDIENTE_CONFIRMACION` con fuente y ubicación.
 - Los documentos académicos contienen temas ajenos. No importar QR, multiplicación de matrices, speedup ni grafos al simulador.
 
@@ -31,7 +31,7 @@ No inventes reglas para llenar vacíos. Si una decisión impide continuar, compl
 - **02 Brickzon — Scheduler y planificación** (rama `brickzon`): ownership de `scheduler/` y pruebas del módulo; selecciona y ordena READY conforme a la política aprobada; no duplica la política en motores.
 - **03 Aldana — Motor lógico** (rama `aldana`): ownership de `simulation/` y sus pruebas; reloj/eventos/transiciones sin threads reales; comparte semántica con el concurrente.
 - **04 Ángel — Motor concurrente** (rama `angel`): ownership de `concurrent/` y sus pruebas; coordinación de workers reales y sincronización, con un solo CPU lógico simulado.
-- **05 Poma — GUI e integración** (rama `poma`): ownership de `gui/`, punto de entrada y pruebas de integración visual; representa snapshots/eventos, no decide scheduler. Qt 6 es recomendación hasta ratificación.
+- **05 Poma — GUI e integración** (rama `poma`): ownership de `gui/`, punto de entrada y pruebas de integración visual; representa snapshots/eventos, no decide scheduler. Qt 6 está aprobado por DP-11 para el destino v2.
 
 El [workflow canónico](docs/WORKFLOW_DESARROLLO.md) define fases, dependencias, paralelismo, gates, PRs y validación. Los nombres de rama identifican espacios de trabajo, no identidades personales de GitHub. Los cambios que afecten varios módulos se coordinan con sus responsables; nadie cambia contratos compartidos unilateralmente.
 

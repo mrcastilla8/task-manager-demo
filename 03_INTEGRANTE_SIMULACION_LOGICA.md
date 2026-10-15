@@ -24,6 +24,8 @@ Pruebas previstas: `tests/test_simulation_quantum.cpp` (nombre legado; en v2 ver
 
 Usar `ConcurrentSimulator::v2` solo después de ratificación e integración de la API. `Resultado`/`CodigoResultado` frente a excepciones es una propuesta técnica; conservar en diseño la distinción PID inexistente, FINISH y CANCEL hasta ratificar semántica. DP-06 aprueba transiciones/efectos generales y no aprueba esos códigos ni idempotencia específica.
 
+DP-07 aprueba unidades lógicas repetidas en modo continuo, pero `IExecutionEngine` aún no define el driver no bloqueante. Revisar alternativas de timer cooperativo/continuador en [propuestas técnicas](docs/PROPUESTAS_TECNICAS_V2.md) antes de añadir un método o callback; el motor lógico no ejecutará un bucle continuo bloqueante dentro de `iniciar()`.
+
 ## Contexto histórico de v1
 
 La API raíz `contracts/*.h` sigue vigente para el código existente: prioridades 1–10, quantum global configurable 500 ms, aging y contabilidad `quantumConsumido`. Mantener v1 sin cambios en esta fase. Esas reglas son compatibilidad histórica y no deben copiarse al motor v2. La antigua ambigüedad de `siguientePaso()` quedó resuelta para el destino por DP-07.

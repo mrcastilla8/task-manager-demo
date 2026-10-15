@@ -38,7 +38,7 @@ Auditoría de `origin/master` en `c4613e5` y ramas remotas examinadas el 2026-10
 
 ## Responsables, dependencias y gates
 
-Castilla (modelo → estructura/memoria) es prerequisito de Brickzon (Scheduler). Con contratos/Scheduler fijados, Aldana y Ángel migran motores en paralelo; Poma avanza mock Qt 6 contra interfaz congelada en paralelo. Gates: G1 ratificación de propuestas y namespace/API; G2 modelo+validación+memoria; G3 Scheduler y criterios READY; G4 ambos motores pasan mismos vectores deterministas; G5 mock/GUI reproduce eventos y timeline de ambos; G6 revisión de memoria, concurrency, aceptación de equipo y PR. No marcar módulos integrados antes de merge de sus ramas.
+Castilla (modelo → estructura/memoria) es prerequisito de Brickzon (Scheduler). Con contratos/Scheduler fijados, Aldana y Ángel migran motores en paralelo; Poma avanza mock Qt 6 contra interfaz congelada en paralelo. G1 debe revisar explícitamente driver de continuidad, política de error, protocolo de cancelación y replay/eventos de [propuestas técnicas v2](PROPUESTAS_TECNICAS_V2.md); solo después se congela interfaz/API. Siguen G2 modelo+validación+memoria; G3 Scheduler y criterios READY; G4 ambos motores pasan mismos vectores deterministas; G5 mock/GUI reproduce eventos y timeline de ambos; G6 revisión de memoria, concurrencia, aceptación de equipo y PR. No marcar módulos integrados antes de integrar sus ramas.
 
 ## Pruebas y límites conocidos
 

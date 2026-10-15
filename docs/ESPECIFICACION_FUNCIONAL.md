@@ -30,19 +30,19 @@ Una implementación compartida selecciona entre READY por prioridad descendente,
 | RUN | FINISH | CPU restante llega a cero; libera memoria; estado terminal. |
 | READY/RUN/WAIT | CANCEL | Cancelación; libera memoria una vez; estado terminal. |
 
-Las reglas anteriores son decisiones funcionales del equipo para v2. La granularidad segura reproducible de una cancelación concurrente y el orden de eventos simultáneos siguen como propuestas técnicas, no completan DP-06 por inferencia.
+Las reglas anteriores son decisiones funcionales del equipo para v2. La granularidad segura reproducible, la carrera con FINISH y el orden de publicación siguen como propuestas técnicas, no completan DP-06 por inferencia. El protocolo de checkpoints lógicos propuesto está en [Propuestas técnicas v2](PROPUESTAS_TECNICAS_V2.md#3-cancelación-run-parcial).
 
 ## Reloj, paso, eventos y timeline
 
 Todo tiempo del modelo usa milisegundos simulados. Threads reales, demoras de coordinación, animación y refresco Qt no avanzan por sí mismos ese reloj.
 
-`siguientePaso()` requiere PAUSADO. Con READY despacha y ejecuta una ráfaga hasta cuota, WAIT, FINISH o CANCEL. Sin READY y con WAIT, avanza el reloj hasta el despertar más próximo sin atribuir CPU y sin despachar en esa misma llamada; el próximo despacho pertenece al paso siguiente. Sin procesos activos ni WAIT pendiente, publica FINALIZADO. El modo continuo repite estas mismas unidades. Ambos motores deben dar el mismo resultado observable por paso.
+`siguientePaso()` requiere PAUSADO. Con READY despacha y ejecuta una ráfaga hasta cuota, WAIT, FINISH o CANCEL. Sin READY y con WAIT, avanza el reloj hasta el despertar más próximo sin atribuir CPU y sin despachar en esa misma llamada; el próximo despacho pertenece al paso siguiente. Sin procesos activos ni WAIT pendiente, publica FINALIZADO. DP-07 aprueba que modo continuo repita esas unidades, pero el contrato no define todavía cómo impulsar el motor lógico sin bloquear Qt. No llamar a un bucle continuo dentro de `iniciar()`. La [propuesta técnica](PROPUESTAS_TECNICAS_V2.md#1-ejecución-continua-sin-bloquear-qt) compara timer cooperativo del host con continuador inyectado; no se ratificó cambio de firma ni mecanismo. Ambos motores deben dar el mismo resultado observable por unidad.
 
 Cada `BloqueTimeline` es exclusivamente un intervalo de CPU realmente ejecutado, semiabierto `[inicioMs,finMs)`, con PID positivo. Los intervalos van en orden cronológico, son positivos y no se solapan. CPU idle no es un bloque, no tiene PID de timeline y no introduce tipo contractual de segmento idle. La vista infiere huecos dentro de `[0, EstadoSistema.tiempoSimuladoMs)`: antes del primer intervalo, entre intervalos y después del último hasta el reloj del snapshot. Un `Evento` de CPU idle puede señalar inicio/fin con `pid=-1` como ausencia de proceso asociado, pero no cambia la regla de los bloques.
 
 Ejemplo de ejecución, espera e idle inferido: A ejecuta `[0,8)`; luego A está WAIT y el CPU no ejecuta durante `[8,18)`; al despertar, B ejecuta `[18,22)`. Con snapshot en tiempo 27, el timeline contractual contiene solamente bloques `(A,[0,8))` y `(B,[18,22))`. La vista deduce idle `[8,18)` y `[22,27)`. No crea segmentos para esos huecos. Una pausa de interfaz sin avance del reloj no crea intervalo idle simulado.
 
-Eventos/snapshots reproducibles deben permitir mostrar RUN transitorio incluso si el motor completa una ráfaga antes del repintado. Orden exacto de publicaciones y secuencia/checkpoints se mantiene como propuesta técnica a ratificar. El GUI no avanza el reloj.
+Eventos/snapshots reproducibles deben permitir mostrar RUN transitorio incluso si el motor completa una ráfaga antes del repintado. `Evento` hoy no define orden total de timestamps iguales ni inicio/fin de CPU. La propuesta de secuencia monótona, representación `[inicio,inicio+duración)` y replay por frontera está en [Propuestas técnicas v2](PROPUESTAS_TECNICAS_V2.md#4-orden-y-representación-de-eventos); no se ha añadido campo a los headers. El GUI no avanza el reloj.
 
 ## Memoria e interfaz
 
@@ -54,7 +54,7 @@ El historial completo de sesión no descarta información. Indexación, eventos 
 
 ## Política de errores candidata
 
-La API `Resultado`/`CodigoResultado` y la sustitución de excepciones v1 por códigos son **propuesta técnica**; DP-01–DP-11 no eligieron ese mecanismo. Véase [contratos candidatos](CONTRATOS_V2.md#errores-pausa-reinicio-y-cancelación). La semántica propuesta distingue PID inexistente, ya finalizado y ya cancelado; operar sobre un terminal no equivale a que el PID nunca haya existido.
+`Resultado`, `CodigoResultado` y `ResultadoPaso` son propuestas técnicas; DP-01–DP-11 no eligieron el mecanismo de error. La [comparación por método y capa](PROPUESTAS_TECNICAS_V2.md#2-errores-excepciones-frente-a-códigos) muestra efectos sobre motores, GUI, mocks y pruebas. La distinción PID inexistente/FINISH/CANCEL también requiere ratificación; un terminal conocido no equivale a PID inexistente.
 
 ## Contexto histórico v1.0
 

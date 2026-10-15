@@ -8,6 +8,8 @@ Los encabezados [v1.0](contracts/README.md) permanecen congelados y vigentes par
 
 DP-01–DP-11 fijan prioridad automática P1/P2/P3 por tamaño, TL formada por READY/RUN/WAIT, fórmula estricta exacta, cuotas fijas de 10/20/30 ms por despacho, orden READY prioridad-ticket-PID, cancelación y estados terminales, unidad del paso lógico, timeline/historial, lista simplemente enlazada futura, ausencia de aging activo y Qt 6/C++17/CMake con dos motores sobre una interfaz común. Son decisiones de equipo, no requisitos docentes adicionales.
 
+La selección del driver continuo, política de errores, protocolo reproducible de cancelación RUN y secuencia/replay de eventos siguen como propuestas técnicas por ratificar en [docs/PROPUESTAS_TECNICAS_V2.md](docs/PROPUESTAS_TECNICAS_V2.md); los contratos candidatos no están congelados ni operativos.
+
 ## Auditoría de ramas
 
 En `origin/master`, solo existen `core/` (con `std::list`) y los contratos v1.0. El Scheduler está en ramas remotas `brickzon` y `angel`; motor concurrente solo en `angel`; motor lógico y GUI no se encontraron en las seis ramas auditadas (`master`, `brickzon`, `aldana`, `angel`, `castilla`, `poma`). No se declara integración por existencia en una rama individual.

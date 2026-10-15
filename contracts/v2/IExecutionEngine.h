@@ -5,6 +5,8 @@
 
 namespace ConcurrentSimulator::v2 {
 
+// Estos tipos y sus semánticas son una PROPUESTA TÉCNICA pendiente de
+// ratificación; no son parte de las 19 decisiones funcionales aprobadas.
 enum class CodigoResultado {
     OK,
     ARGUMENTO_INVALIDO,
@@ -39,6 +41,7 @@ public:
     // PID_FINALIZADO o PID_YA_CANCELADO distinguen el estado sin mutarlo.
     // Repetir cancelación es idempotente respecto del estado e historial.
     virtual Resultado cancelarProceso(int pid) = 0;
+    // En modo continuo, driver/unidad entre llamadas aún por ratificar.
     virtual Resultado iniciar() = 0;  // Inicia o reanuda.
     virtual Resultado pausar() = 0;
     virtual Resultado reiniciar() = 0;  // Conserva Configuracion.

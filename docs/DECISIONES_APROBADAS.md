@@ -4,74 +4,74 @@
 
 | ID | Decisión y subdecisiones aprobadas | Procedencia | Aprobación | Responsables de migración | Efectos | Criterios de aceptación |
 |---|---|---|---|---|---|---|
-| DP-01 | D01 prioridades solo P1/P2/P3; D02 tamaño determina automáticamente la clase; D03 pequeño=P1, mediano=P2, grande=P3; D04 P3 gana y no hay prioridad manual ni escala activa 1–10. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Castilla, Poma | Alta sin prioridad; selector máximo P3 | Pruebas verifican mapeo y P3>P2>P1. |
-| DP-02 | D05 TL contiene READY/RUN/WAIT; FINISH/CANCEL se excluyen de min/max; D06 recalcular después de alta admitida, FINISH y CANCEL y publicar antes del próximo despacho; D07 alta no interrumpe turno ni cambia su cuota; rechazo de memoria no cambia TL/clases. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Aldana, Ángel | Reclasificación dinámica con turno en curso fijado | Casos cubren entrada, terminalidad, WAIT y alta rechazada. |
-| DP-03 | D08 fórmula estricta P1 si S<A+H; P2 si no P1 y S<A+2H; P3 en otro caso; forma exacta D=B-A, X=3(S-A), comparar X<D y X<2D; D09 A=B resulta P3 y TL vacía no calcula extremos. | DECISION_EQUIPO aprobando literal de notas pp. 24–25 | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Castilla | Aritmética exacta entera | Fronteras estrictas, A=B y tamaño máximo sin overflow; usar evaluación segura equivalente. |
-| DP-04 | D10 cuota por despacho = prioridad×10 ms (10/20/30); D11 es máximo de ráfaga y puede terminar antes por CPU agotada, WAIT o CANCEL; sustituye quantum global 500 ms y controles globales contradictorios; cuota fijada al despacho no cambia retroactivamente. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Castilla, Aldana, Ángel, Poma | Quitar API global quantum del v2; snapshot expone cuota del turno | Pruebas de 10/20/30 ms, fin temprano y cambio de TL durante RUN. |
-| DP-05 | D12 Scheduler elige prioridad READY mayor, luego ticket menor, luego PID ascendente; D13 ticket estrictamente creciente nuevo al entrar READY por alta, retorno WAIT y agotamiento de cuota; no duplicar regla en motores; lista enlazada no define selección. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Aldana, Ángel | Scheduler compartido y Round Robin coherente | Igualdad da FIFO por ticket y reingreso obtiene ticket nuevo. |
-| DP-06 | D14 cancelar READY/RUN/WAIT; FINISH y CANCEL terminales; RUN se cancela en punto seguro reteniendo CPU simulada efectivamente ejecutada; registrar CPU/timeline solo si intervalo positivo; no usar reloj físico; especificar transiciones, eventos y memoria. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Aldana, Ángel, Poma | Contrato explícito para cancelación e historial | Matriz de transición, memoria liberada una vez, cancelación en t=0 no crea segmento. |
-| DP-07 | D15 paso PAUSADO con READY ejecuta un turno hasta cuota/WAIT/FINISH/CANCEL; sin READY y WAIT con despertar adelanta reloj hasta el próximo; ese despertar no despacha en el mismo paso; solo terminales finaliza sistema. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Aldana, Ángel | Unidad lógica común; continuo itera unidades | Comparación ambos motores por paso: reloj, eventos, estado y timeline. |
-| DP-08 | D16 timeline con huecos idle inferidos, sin PID ni bloques idle; historial total de sesión, scroll/zoom, memoria proporcional por PID/espacio libre y reproducción eventos/snapshots para RUN transitorio; GUI no modifica reloj ni confunde animación con CPU; conservar historial eficientemente. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Poma, Aldana, Ángel | Snapshot/events y rendering con gaps inferidos | Gaps antes/entre/después de intervalos se derivan con reloj snapshot; cada bloque es ejecución CPU de PID positivo. |
-| DP-09 | D17 Castilla implementa lista simplemente enlazada dinámica (nodo, primero, último, siguiente), conserva API funcional compatible; definir propiedad, copia/movimiento y destrucción; no cambiar `std::list`/core en Fase 0. | DECISION_EQUIPO; coordinación, atendiendo intención docente pp. 25 | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Castilla | Migración futura de estructura y garantía de valor | Pruebas de vacío, inserción, borrado, copia/move, autoasignación y destructor sin fugas/doble liberación. |
-| DP-10 | D18 no hay aging activo; no sumar prioridad por espera. Espera sigue métrica; aging previo es solo antecedente/extensión futura. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Poma | Quitar configuración y expectativas de aging en v2 | Aumentar espera no cambia P1/P2/P3; referencias a aging etiquetadas históricas. |
-| DP-11 | D19 GUI Qt 6 + C++17 + CMake; motores lógico Aldana y concurrente Ángel comparten Scheduler y contrato v2; Poma consume interfaz común sin planificar en widgets; un solo CPU lógico aunque haya threads. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Aldana, Ángel, Poma, Brickzon | Framework y límites de arquitectura | Mock y ambos motores cumplen la misma interfaz y casos observables. |
+| DP-01 | Prioridades solo P1/P2/P3, automáticas por tamaño; pequeño=P1, mediano=P2, grande=P3; P3 gana; sin prioridad manual ni escala activa 1–10. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Castilla, Poma | Alta sin prioridad; selector máximo P3 | Pruebas verifican mapeo y P3>P2>P1. |
+| DP-02a, DP-02b, DP-02c | **DP-02a:** TL contiene READY/RUN/WAIT y excluye FINISH/CANCEL de min/max. **DP-02b:** recalcular después de alta admitida, FINISH y CANCEL y aplicar antes del despacho siguiente. **DP-02c:** alta no interrumpe turno ni cambia cuota fijada; rechazo de memoria no altera TL/clases. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Aldana, Ángel | Reclasificación dinámica con turno en curso fijado | Casos cubren población, cada disparador y efectos de admisión. |
+| DP-03 | Fórmula estricta P1 si S<A+H; P2 si no P1 y S<A+2H; P3 en otro caso; D=B-A, X=3(S-A), comparar X<D y X<2D; A=B da P3 y TL vacía no calcula extremos. | DECISION_EQUIPO aprobando literal de notas pp. 24–25 | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Castilla | Aritmética exacta entera | Fronteras estrictas, A=B y tamaño máximo sin overflow; usar evaluación segura equivalente. |
+| DP-04 | Cuota por despacho = prioridad×10 ms (10/20/30); máxima, puede terminar por CPU agotada/WAIT/CANCEL; sustituye quantum global 500 ms; cuota del turno se fija al despacho. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Castilla, Aldana, Ángel, Poma | Quitar API global quantum del v2; snapshot expone cuota del turno | Pruebas de 10/20/30 ms, fin temprano y cambio de TL durante RUN. |
+| DP-05 | Scheduler elige READY de mayor prioridad, luego menor ticket, luego PID ascendente; ticket estrictamente creciente al entrar READY por alta/retorno WAIT/cuota agotada; un único Scheduler. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Aldana, Ángel | Scheduler compartido y Round Robin coherente | Igualdad da FIFO por ticket y reingreso obtiene ticket nuevo. |
+| DP-06a, DP-06b | **DP-06a:** cancelar desde READY/RUN/WAIT; FINISH/CANCEL terminales; especificar transiciones, eventos y efectos de memoria. **DP-06b:** RUN se cancela en punto seguro conservando CPU simulado realmente completado; timeline/tiempos solo con intervalo positivo; no usar reloj físico. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Aldana, Ángel, Poma | Contrato explícito para cancelación e historial | Memoria liberada una vez; cancelación sin CPU no crea segmento. Protocolo de frontera por ratificar. |
+| DP-07a, DP-07b | **DP-07a:** `siguientePaso()` en PAUSADO, con READY ejecuta un turno hasta cuota/WAIT/FINISH/CANCEL. **DP-07b:** sin READY y con WAIT con despertar avanza reloj al próximo; no despacha en ese paso; si todo es terminal el sistema finaliza. Modo continuo repite estas unidades. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Aldana, Ángel | Unidad lógica común | Comparación ambos motores por paso: reloj, eventos, estado y timeline. Driver de ejecución continua sigue por ratificar. |
+| DP-08a, DP-08b, DP-08c, DP-08d | **DP-08a:** idle como huecos sin PID ni bloques idle. **DP-08b:** historial completo de sesión con scroll/zoom. **DP-08c:** memoria proporcional por PID/espacio libre. **DP-08d:** reproducir eventos/snapshots para RUN transitorio; GUI no toca reloj ni confunde animación con CPU. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Poma, Aldana, Ángel | Snapshot/events y rendering con gaps inferidos | Gaps antes/entre/después se derivan hasta reloj snapshot; cada bloque es ejecución CPU PID positivo. Representación eficiente conserva la fuente completa. |
+| DP-09 | Lista simplemente enlazada dinámica (nodo, primero, último, siguiente), API funcional compatible; definir propiedad, copia/movimiento y destrucción; no cambiar `std::list`/core en Fase 0. | DECISION_EQUIPO; coordinación, atendiendo intención docente pp. 25 | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Castilla | Migración futura de estructura y garantía de valor | Pruebas de vacío, inserción, borrado, copia/move y destructor seguros. |
+| DP-10 | No hay aging activo ni suma de prioridad por espera; espera es métrica; aging anterior solo antecedente/extensión no activa. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Brickzon, Poma | Quitar configuración y expectativas de aging en v2 | Espera no cambia P1/P2/P3. |
+| DP-11a, DP-11b | **DP-11a:** Qt 6 + C++17 + CMake aprobado. **DP-11b:** motor lógico Aldana y concurrente Ángel comparten Scheduler/interfaz v2; Poma no planifica en widgets; un CPU lógico aunque haya threads reales. | DECISION_EQUIPO; coordinación | Formalizada 2026-10-15; fecha exacta de aprobación original no informada | Aldana, Ángel, Poma, Brickzon | Framework y límites de arquitectura | Mock y ambos motores cumplen la misma interfaz y casos observables. |
 
-Las diecinueve subdecisiones se identifican D01–D19 para revisión sin cambiar la agrupación oficial DP-01–DP-11. Las decisiones describen el destino aprobado; hasta completar migración, v1.0 sigue vigente para el código ya compilado.
+Las once decisiones oficiales contienen diecinueve respuestas: DP-01, DP-02a, DP-02b, DP-02c, DP-03, DP-04, DP-05, DP-06a, DP-06b, DP-07a, DP-07b, DP-08a, DP-08b, DP-08c, DP-08d, DP-09, DP-10, DP-11a y DP-11b. Se conserva la agrupación DP-01–DP-11 y las opciones aprobadas sin cambios. Las decisiones describen el destino aprobado; hasta completar migración, v1.0 sigue vigente para el código ya compilado.
 
 ## DP-01 — Prioridades
 
-D01–D04: P1–P3 automáticas desde tamaño, P3 máxima, alta sin selección manual y sin escala activa 1–10 en v2.
+DP-01: P1–P3 automáticas desde tamaño, P3 máxima, alta sin selección manual y sin escala activa 1–10 en v2.
 
 <a id="dp-02--población-y-recalculo"></a>
 ## DP-02 — Población y recálculo
 
-D05–D07: TL=READY/RUN/WAIT; excluir terminales; recalcular tras admisión exitosa, FINISH y CANCEL antes del próximo despacho; alta rechazada no cambia TL; alta admitida no modifica turno/cuota ya fijados.
+DP-02a, DP-02b y DP-02c: TL=READY/RUN/WAIT; excluir terminales; recalcular tras admisión exitosa, FINISH y CANCEL antes del próximo despacho; alta rechazada no cambia TL; alta admitida no modifica turno/cuota ya fijados.
 
 ## DP-03 — Algoritmo exacto
 
-D08–D09: usar límites estrictos y evaluación entera exacta de D/X; A=B da P3; TL vacía evita min/max.
+DP-03: usar límites estrictos y evaluación entera exacta de D/X; A=B da P3; TL vacía evita min/max.
 
 ## DP-04 — Cuotas individuales
 
-D10–D11: cuota máxima `prioridad×10 ms`; 10/20/30 ms; no mantener quantum global configurable en v2; fijar cuota al inicio de despacho.
+DP-04: cuota máxima `prioridad×10 ms`; 10/20/30 ms; no mantener quantum global configurable en v2; fijar cuota al inicio de despacho.
 
 ## DP-05 — Cola y Round Robin
 
-D12–D13: seleccionar READY por prioridad descendente, ticket ascendente, PID ascendente; nuevo ticket estrictamente creciente en cada ingreso a READY.
+DP-05: seleccionar READY por prioridad descendente, ticket ascendente, PID ascendente; nuevo ticket estrictamente creciente en cada ingreso a READY.
 
 ## DP-06 — Estados y cancelación
 
-D14: cancelar desde READY/RUN/WAIT; terminales FINISH/CANCEL; conservar CPU simulado efectivo y no crear intervalo cero; registrar efectos/eventos/memoria.
+DP-06a y DP-06b: cancelar desde READY/RUN/WAIT; terminales FINISH/CANCEL; conservar CPU simulado efectivo y no crear intervalo cero; registrar efectos/eventos/memoria.
 
 ## DP-07 — Paso y tiempo simulado
 
-D15: un paso PAUSADO procesa una ráfaga lógica hasta cuota/WAIT/FINISH/CANCEL, o avanza idle hasta despertar sin despachar hasta el paso siguiente; terminales finalizan sistema.
+DP-07a y DP-07b: un paso PAUSADO procesa una ráfaga lógica hasta cuota/WAIT/FINISH/CANCEL, o avanza idle hasta despertar sin despachar hasta el paso siguiente; terminales finalizan sistema.
 
 ## DP-08 — GUI y timeline
 
-D16: CPU idle se representa como hueco inferido, sin PID ni bloque contractual; sesión completa con scroll/zoom, memoria proporcional por PID/libre, replay RUN; GUI no toca reloj simulado.
+DP-08a, DP-08b, DP-08c y DP-08d: CPU idle se representa como hueco inferido, sin PID ni bloque contractual; sesión completa con scroll/zoom, memoria proporcional por PID/libre, replay RUN; GUI no toca reloj simulado.
 
 ## DP-09 — Estructura enlazada
 
-D17: lista simplemente enlazada dinámica con primero/último y ownership/copy/move/destructor seguros; API funcional compatible; migración futura, no en Fase 0.
+DP-09: lista simplemente enlazada dinámica con primero/último y ownership/copy/move/destructor seguros; API funcional compatible; migración futura, no en Fase 0.
 
 ## DP-10 — Aging
 
-D18: no hay aging activo; espera solo métrica; aging anterior queda como antecedente/extensión futura.
+DP-10: no hay aging activo; espera solo métrica; aging anterior queda como antecedente/extensión futura.
 
 ## DP-11 — Interfaz y motores
 
-D19: Qt 6/C++17/CMake; motores lógico/concurrente comparten Scheduler e interfaz v2; GUI no planifica; CPU lógico único.
+DP-11a y DP-11b: Qt 6/C++17/CMake; motores lógico/concurrente comparten Scheduler e interfaz v2; GUI no planifica; CPU lógico único.
 
 ## Propuestas técnicas no ratificadas
 
-Estas recomendaciones resuelven detalles de diseño para revisión; no amplían D01–D19:
+Estas recomendaciones resuelven detalles de diseño para revisión; no amplían las diecinueve respuestas aprobadas:
 
 1. Para varios WAIT con el mismo vencimiento: procesar por (instante de despertar, ticket WAIT asignado al bloquear, PID); todos los retornos del mismo instante se convierten a READY en un lote antes de publicar snapshot. Prueba: invertir el orden de almacenamiento no cambia la secuencia de eventos/tickets.
 2. Prioridades derivadas recalculadas se publican como lote atómico junto al evento/snapshot, antes de seleccionar el próximo READY. No se publica estado parcial.
 3. La cuota vigente se deriva exclusivamente con `cuotaMs(prioridad)`; no almacenar `cuotaActualMs` redundante. Al despacho, copiar el valor a `cuotaTurnoFijadaMs`. Reclasificar RUN puede cambiar la cuota derivada para un despacho futuro, sin alterar la copia del turno. Esta precisión aplica el principio de DP-04; el layout de la API v2 sigue candidato a adopción.
-4. Para cancelación reproducible, motores reconocen solicitud en los mismos límites de avance lógico (cada milisegundo simulado o subevento determinista); priorizar API de comandos de paso, evitando dependencia del instante de planificación de threads reales. Pruebas solicitan cancelación en t=0, antes de borde de cuota y en borde exacto.
-5. Registrar eventos ordenados con intervalos CPU explícitos (inicio, fin, PID, duración) y snapshots por número de secuencia; esto reconstruye RUN transitorio tras terminar la ráfaga.
+4. La granularidad y precedencia de cancelación se proponen por separado en [protocolo de cancelación RUN](PROPUESTAS_TECNICAS_V2.md#3-cancelación-run-parcial). Cualquier checkpoint se define en tiempo lógico y no con reloj físico; DP-06 no aprueba el punto exacto.
+5. Protocolo de eventos y replay por secuencia creciente propuestos en [orden de eventos](PROPUESTAS_TECNICAS_V2.md#4-orden-y-representación-de-eventos). Timestamp de CPU + duración representa `[inicio,inicio+duración)` si se ratifica; RUN puede reconstruirse desde dispatch hasta evento de fin.
 6. Pausa toma efecto en un límite lógico seguro; snapshot es copia consistente bajo el mismo límite. Reinicio detiene/une workers, borra procesos/eventos/timeline y reloj, conserva configuración.
 7. FINISH/CANCEL quedan en `EstadoSistema.procesos` y la sesión hasta reinicio, aunque se excluyan de TL/memoria activa.
 8. Sin aging puede haber inanición P1 si siempre hay READY P2/P3; medir espera máxima y documentar esta consecuencia. No añadir mitigación sin nueva aprobación.

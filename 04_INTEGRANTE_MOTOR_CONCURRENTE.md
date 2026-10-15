@@ -22,6 +22,7 @@ Implementar los mismos resultados observables que el motor lógico mediante `std
 - Cada bloque `BloqueTimeline` representa únicamente CPU ejecutado por PID positivo, duración positiva. Inferir idle por gaps desde origen de sesión hasta reloj snapshot. Ejemplo: A ejecuta `[0,8)`, WAIT produce idle `[8,18)`, B ejecuta `[18,22)`; a snapshot 27 los gaps idle son `[8,18)` y `[22,27)` y no hay segmentos con PID especial.
 - Sin busy waiting. Workers sin turno duermen en CV. Proteger procesos, estado, memoria, eventos, timeline y snapshots; no tomar mutex compartido mientras se espera a que worker/cancelación pueda completar. Cierre despierta y une todos los threads.
 - La cancelación terminal/error sigue pendiente: distinguir PID desconocido, FINISH y CANCEL es una propuesta técnica que debe ratificarse; no atribuirla a DP-06.
+- El worker y coordinador de `origin/angel` actuales no producen cancelación CPU parcial determinista; usar la [auditoría/protocolo propuesto](docs/PROPUESTAS_TECNICAS_V2.md#3-cancelación-run-parcial) como base de revisión, sin trasladar sus checkpoints a código antes de ratificación.
 
 ## Pruebas necesarias
 

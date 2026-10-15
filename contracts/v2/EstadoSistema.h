@@ -40,6 +40,8 @@ struct EstadoSistema {
     std::int64_t cpuConsumidaTurnoMs{0};
     std::int64_t memoriaUsadaBytes{0};
     std::int64_t memoriaTotalBytes{0};
+    // Historial candidato; secuencia/orden para timestamps iguales está por
+    // ratificar antes de depender de él para replay determinista.
     std::vector<Evento> eventos;
     // Intervalos CPU terminados, cronológicos, no superpuestos y con PID>0.
     // Idle se infiere como los huecos en [0, tiempoSimuladoMs).

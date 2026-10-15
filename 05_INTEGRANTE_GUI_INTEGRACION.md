@@ -8,6 +8,8 @@ Construir la GUI e integrar el motor lógico de Aldana y el concurrente de Ánge
 
 El destino de contrato sigue siendo **candidato a adopción, no operativo**. Revisar [contratos v2](docs/CONTRATOS_V2.md), [decisiones](docs/DECISIONES_APROBADAS.md) y [migración](docs/MIGRACION_CONTRATOS_V2.md). La semántica de códigos de resultado y cancelación idempotente está propuesta, pendiente de ratificación; no convertirla en requisito de DP-06.
 
+El modo continuo aún necesita ratificación de un driver no bloqueante para el motor lógico. La propuesta preferida usa timer cooperativo del loop Qt; revisar alternativas e impactos antes de cambiar la interfaz o los mocks en [propuestas técnicas](docs/PROPUESTAS_TECNICAS_V2.md).
+
 ## Dependencias y trabajo en paralelo
 
 Poma puede empezar con mock/fixtures cuando se congele la interfaz, mientras Aldana y Ángel trabajan en paralelo tras contrato y Scheduler estables. Integrar primero motor lógico y después concurrente; ambos deben producir resultados observables equivalentes. Los threads concurrentes siguen representando un único CPU lógico. El refresco Qt no incrementa reloj ni cuenta como tiempo de CPU.
