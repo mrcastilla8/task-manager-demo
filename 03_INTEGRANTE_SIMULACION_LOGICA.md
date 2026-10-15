@@ -1,26 +1,82 @@
 # Integrante 3 — Motor de simulación lógica
 
-Documento recuperado de `origin/aldana`. Se conserva su alcance de motor sin threads, y se armoniza el vocabulario de tiempo, transiciones y decisiones con la documentación canónica.
+Asignación recuperada de `origin/aldana`. Este módulo es el motor de referencia sin threads reales: mantiene un reloj simulado y avanza procesos como objetos. La carpeta `simulation/` y su implementación aún no aparecen en las ramas revisadas; las rutas abajo son entregables previstos, no archivos ya existentes.
 
-## Objetivo y estado de rama
+## Contrato y responsabilidades
 
-El motor lógico modela el reloj y el avance de los procesos sin crear threads reales y publica snapshots/eventos mediante `IExecutionEngine`. No contiene widgets ni sustituye al Scheduler. No aparece una implementación de este módulo en las seis ramas revisadas para la auditoría; la asignación documenta trabajo esperado, no una capacidad ya integrada.
+Implementa `IExecutionEngine` desde [contracts/IExecutionEngine.h](contracts/IExecutionEngine.h). Métodos contractuales exactos:
 
-## Reglas que deben compartir los motores
+- `agregarProceso(const Proceso&)`, `cancelarProceso(int)`.
+- `iniciar()`, `pausar()`, `reiniciar()`, `siguientePaso()`.
+- `configurarQuantum(std::int64_t)`, `obtenerQuantum() const`.
+- `obtenerEstado() const`, que devuelve snapshot `EstadoSistema` por valor.
 
-El tiempo es milisegundo simulado en el contrato vigente. El equipo mantiene quantum global configurable de 500 ms y E/S opcional. Las notas del profesor describen cuota como atributo y time-sharing en un CPU lógico; la fórmula `prioridad × 10 ms` es un ejemplo, no regla obligatoria confirmada. No mezclar la cuota individual con el quantum común (DP-04).
+Respeta errores, idempotencia, memoria y restricciones de cada método descritas en [contracts/README.md](contracts/README.md). No publiques una interfaz alternativa basada en el snippet original: este contrato vigente incluye configuración de quantum y describe `siguientePaso()` como una transición significativa. Sin embargo, su unidad exacta frente a una ráfaga sigue pendiente DP-07 y debe resolverse antes de la equivalencia de motores.
 
-El motor debe informar transiciones y eventos, tiempo restante, memoria, cola y timeline con la misma semántica que el motor concurrente una vez definida. La unidad de `siguientePaso()` no está resuelta: el contrato 1.0 dice una transición significativa, mientras los documentos de motor permiten entender una ráfaga completa y el motor concurrente actual espera el fin de una ráfaga/turno. Cerrar DP-07 antes de definir pruebas de equivalencia.
+## Reloj y ciclo operativo
 
-Estados docentes: READY, RUN, WAIT, FINISH y CANCEL (notas, págs. 23 y 27). El retorno RUN→READY por agotamiento de turno se desprende de time-sharing; las reglas de E/S y cancelación actuales son decisiones del equipo. No considerar ausente una transición solo porque no esté dibujada. Ver DP-06 y la matriz de la especificación.
+Mantener `tiempoSimulado` en milisegundos, independiente del reloj físico y de la velocidad visual. El ciclo funcional que debe coordinar el motor es:
 
-## Casos y criterios
+1. Procesar expiraciones de procesos en WAIT y retornos a READY.
+2. Actualizar espera READY y ejecutar aging según Scheduler aprobado.
+3. Obtener snapshot/colección actual y pedir al Scheduler el PID READY siguiente.
+4. Si no hay READY, determinar si existen esperas que puedan despertar procesos o si la ejecución finalizó; política de tiempo idle está pendiente.
+5. Registrar READY→RUN y entregar el intervalo permitido al proceso elegido.
+6. Avanzar tiempo simulado y descontar tiempo restante por el intervalo de CPU realmente ejecutado.
+7. Resolver motivo de fin: agotamiento de turno→READY; operación de E/S→WAIT; tiempo restante cero→FINISH.
+8. Actualizar memoria según el ciclo de vida acordado, orden de reingreso READY según DP-05 y cola de prioridad.
+9. Registrar eventos y el bloque de timeline del intervalo de CPU.
+10. Publicar una fotografía consistente mediante `EstadoSistema`.
 
-Usa [P4, P8, P10–P13](docs/CASOS_REFERENCIA.md) y trazabilidad [RD-08–RD-14, DP-04, DP-06–DP-08](docs/MATRIZ_TRAZABILIDAD.md).
+Este orden es el ciclo lógico esperado por la asignación, no una definición normativa del límite de `siguientePaso()`. Debe marcarse qué suboperaciones son una transición/evento una vez DP-07 se decida.
 
-- Define el reloj simulado y el momento de registrar eventos tras aprobar DP-07.
-- Un turno crea un bloque timeline `[inicio, fin)` consistente con duración ejecutada.
-- WAIT y retorno READY se coordinan con el reloj común acordado.
-- Altas dinámicas y cancelaciones siguen transiciones aprobadas, no reglas inventadas.
-- En el escenario CPU sin READY no se atribuye ejecución a un proceso; idle requiere decisión visual.
-- No implementes reglas o interfaces que requieran modificar contratos v1.0 antes de aprobar una nueva versión.
+## Quantum, cuotas y ejecución
+
+**Decisión vigente del equipo:** motor usa quantum global configurable, por defecto 500 ms. En un recorrido completo con A `tiempoRestante=1300` ms y quantum 500 ms, las ráfagas son 500, 500 y 300 ms; la última termina el proceso. Esta ilustración no afirma cuántas ráfagas procesa una llamada a `siguientePaso()`.
+
+**Fuente docente:** cuota es atributo de proceso (notas, pág. 23) y `prioridad × 10 ms` es ejemplo de la transcripción. Cuota individual frente a quantum global sigue pendiente DP-04. No agregar campo al contrato v1.0 ni imponer una fórmula.
+
+## E/S, eventos y timeline
+
+El contrato `OperacionIO` actual usa `habilitada`, `despuesDeCpuMs` y `duracionEsperaMs`; el evento de I/O ocurre tras CPU consumida y dura el valor configurado. Ejemplo del documento original del integrante: proceso A con 5,000 ms totales bloquea tras 1,500 ms de CPU y espera 1,000 ms. Al transcurrir la espera, vuelve a READY. El caso sirve para probar operación configurada; no atribuir esas cifras al docente ni generalizar qué estados entran en TL.
+
+Registrar eventos con milisegundos simulados, tipo, PID y descripción, usando los tipos ya definidos (`PROCESS_CREATED`, `PROCESS_ADMITTED`, `PROCESS_READY`, `PROCESS_RUNNING`, `QUANTUM_FINISHED`, `PROCESS_WAITING`, `PROCESS_FINISHED`, `PROCESS_CANCELLED`, `PRIORITY_CHANGED`). No inventar tipos nuevos en v1.0.
+
+`BloqueTimeline` vigente usa PID y extremos `std::int64_t`; representa intervalo semiabierto `[inicio, fin)` con `fin > inicio`. Ejemplo de recorrido completo: A `[0,500)`, B `[500,1000)`, A `[1000,1500)`. Cada bloque corresponde a CPU realmente ejecutado, no a WAIT/idle.
+
+## Archivos y pruebas previstas
+
+Entregables del módulo:
+
+- `simulation/SimulationEngine.h`
+- `simulation/SimulationEngine.cpp`
+- `simulation/SimulationClock.h`
+- `simulation/SimulationClock.cpp`
+- `tests/test_simulation_quantum.cpp`
+- `tests/test_simulation_wait.cpp`
+- `tests/test_simulation_finish.cpp`
+- `tests/test_simulation_cancel.cpp`
+- `tests/test_simulation_dynamic_process.cpp`
+
+Cinco escenarios de prueba:
+
+1. **Quantum/tiempo restante:** A 1,300 ms con quantum 500 completa en intervalos 500/500/300 a través de la simulación total; verificar reloj restante y timeline.
+2. **WAIT:** A bloquea tras 1,500 ms de CPU, WAIT dura 1,000 ms y luego regresa READY; verificar que tiempo CPU y tiempo de espera no se confundan.
+3. **Finalización:** proceso completa cuando restante llega a cero, pasa RUN→FINISH, deja de estar en READY y libera memoria según decisión vigente.
+4. **Cancelación:** PID inexistente/ya cancelado respeta idempotencia contractual; proceso activo se cancela según reglas y registra estado/evento apropiados.
+5. **Alta dinámica:** agregar proceso durante ejecución; validar, admitir o devolver el error contractual por memoria, actualizar snapshot y cola.
+
+La granularidad de cada “paso” no se fija hasta DP-07. Las pruebas de paso deben ser parametrizadas por la decisión aprobada.
+
+## Dependencias y límites
+
+Depende de contratos/modelo (Integrante 1) y Scheduler (Integrante 2). Puede desarrollarse con un doble de Scheduler durante el trabajo en paralelo, sin introducir otra interfaz pública. No implementa GUI, widgets, animaciones, threads, mutex, variables de condición, algoritmo interno de prioridad ni cola visual.
+
+## Criterios de aceptación
+
+- Simulación completa reproducible sin GUI ni threads reales.
+- Reloj, CPU restante, espera WAIT, eventos y timeline se corresponden.
+- Altas dinámicas, cancelación, espera, retorno READY y finalización respetan contrato y decisiones aprobadas.
+- `EstadoSistema` se publica por valor y con cola/memoria/eventos coherentes.
+- Comparte Scheduler y semántica temporal aprobada con ConcurrentEngine.
+- No afirma que un `siguientePaso()` procese transición o quantum hasta resolver DP-07.

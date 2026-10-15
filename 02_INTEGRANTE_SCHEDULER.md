@@ -1,30 +1,63 @@
 # Integrante 2 — Scheduler y política de planificación
 
-Documento recuperado de `origin/brickzon` (la versión de `origin/angel` contiene la misma asignación funcional). Se conserva su responsabilidad y atribución por integrante y se sincroniza con la especificación canónica.
+Asignación recuperada de `origin/brickzon`; `origin/angel` contiene la misma responsabilidad funcional. Se restituye la superficie operativa original, ajustando métodos y unidades a la implementación real de `scheduler/`.
 
-## Objetivo
+## Objetivo y límites
 
-Decidir qué proceso `READY` obtiene el CPU lógico y exponer el orden visible de la cola. El Scheduler es independiente de GUI, temporizadores visuales y threads. Los motores lo usan; no deben duplicar su política.
+Decidir qué proceso `READY` recibe el CPU lógico y construir el orden de PID READY que la GUI representa. Scheduler no depende de GUI, workers, temporizadores gráficos ni del motor concreto. Los motores llaman al mismo Scheduler; no duplican su política.
 
-## Comportamiento registrado del equipo
+## Decisión vigente del equipo
 
-En ramas de Scheduler, la decisión actual selecciona el proceso READY con mayor `prioridadActual`; empata por `ordenLlegada` menor y, si persiste el empate, por PID menor. Las prioridades vigentes son 1–10, con 10 como máxima. El aging documentado añade prioridad a procesos READY cada 2,000 ms de espera, hasta 10; el valor actual se restablece a base cuando el proceso obtiene CPU. Estas reglas son `DECISION_EQUIPO`, no exigencias atribuidas al profesor.
+La política documentada actualmente es Priority Scheduling con desempate por FIFO/orden de llegada y aging:
 
-La prueba de empate crea la rotación entre turnos modificando `ordenLlegada` para A antes de volver a invocar el Scheduler. Eso prueba el selector con un orden de reingreso ya actualizado, no que el motor integrado haga la actualización. `ConcurrentEngine` de `origin/angel` devuelve el proceso a READY tras `QUANTUM_AGOTADO` sin cambiar su `ordenLlegada` (DP-05). La política de actualización está pendiente y el código no se corrige aquí.
+- prioridad válida 1–10; 10 es la mayor en la escala actual del equipo;
+- solo se seleccionan procesos en `READY`;
+- gana mayor `prioridadActual`; empatan por `ordenLlegada` menor y luego por PID menor;
+- cada intervalo completo de espera READY de 2,000 ms suma +1, sin superar 10;
+- al asignar CPU, el Scheduler restaura `prioridadActual` a `prioridadBase` y pone `tiempoEspera` en cero.
 
-## Regla docente aún no integrada
+Todo lo anterior es `DECISION_EQUIPO`, no requisito atribuido al docente. La implementación de aging cuenta intervalos cruzados según el delta recibido. Procesos que no están READY no acumulan aging.
 
-Las notas, pág. 24, definen `AssignPriority()` por tercios del tamaño, con `A=min(TL.Size)`, `B=max(TL.Size)`, `H=(B-A)/3`, prioridad 1 cuando `Size < A+H`, prioridad 2 cuando no se cumplió lo anterior y `Size < A+2H`, y 3 en los demás casos. La transcripción explica el cambio de bandas si llega un proceso mayor (00:11:02–00:14:22). Esta clasificación 1–3 difiere de la escala de equipo 1–10; el sentido de mayor prioridad, los miembros de TL y los momentos de recálculo están pendientes (DP-01, DP-02, DP-03).
+## Algoritmo docente y precedencia
 
-No reemplazar la política actual ni introducir una escala híbrida por intuición. No tratar aging y recálculo dinámico como el mismo mecanismo; su relación queda en DP-10.
+Las notas, pág. 24, dan prioridades 1, 2 y 3 por bandas de tamaño con cortes estrictos `A+H` y `A+2H`. En la pág. 25, `ObtenerMaximaPrioridad()` recorre la lista y conserva el proceso cuyo valor de prioridad es mayor. Por tanto, **en el algoritmo presentado P3 precede a P2 y P1**. Este sentido interno del algoritmo queda documentado como evidencia docente; no está pendiente.
 
-## Evidencia y criterios de aceptación
+Lo que sigue pendiente en DP-01 es si el equipo adopta la escala docente 1–3 o la adapta a la política contractual 1–10. DP-02 determina sobre qué estados se calcula TL y cuándo se recalcula. DP-03 registra el caso degenerado de tamaños iguales/precisión de H. No reemplazar la escala actual ni cambiar scheduler sin ratificación.
 
-Consulta [requisitos RD-04–RD-07](docs/REQUISITOS_DOCENTE.md), [P1–P7](docs/CASOS_REFERENCIA.md) y [DP-01–DP-05, DP-10](docs/DECISIONES_PENDIENTES.md).
+## Superficie de métodos implementada
 
-- Las prioridades docentes producen exactamente los resultados de frontera del caso P1 si se implementan por decisión aprobada.
-- READY se distingue de WAIT, RUN, FINISH y CANCEL al seleccionar según política actual.
-- FIFO de llegada, selección por mayor prioridad y Round Robin de reingreso están descritos separadamente.
-- Las pruebas unitarias se interpretan según lo que configuran; una prueba que cambia `ordenLlegada` a mano no prueba la actualización del motor.
-- Aging no se elimina ni se confunde con reclasificación por tamaño.
-- Ningún cambio de prioridad/contrato se presenta como aprobado antes de cerrar las decisiones correspondientes.
+Las firmas exactas están en `scheduler/Scheduler.h` y la configuración en `scheduler/SchedulerConfig.h` (rutas de la rama de Scheduler; no están presentes en esta rama documental):
+
+- `Scheduler(SchedulerConfig)` y `configuracion()` / `configurar(...)` para leer y actualizar `SchedulerConfig`.
+- `seleccionarSiguiente(const std::vector<Proceso>&) const` devuelve PID ganador o `-1` si no hay READY.
+- `ordenarColaPrioridad(const std::vector<Proceso>&) const` devuelve PIDs READY en orden de prioridad descendente, `ordenLlegada` ascendente y PID ascendente.
+- `aplicarAging(std::vector<Proceso>&, std::int64_t deltaTiempo) const` actualiza espera/prioridad READY con los valores configurados.
+- `alAsignarCPU(Proceso&) const` restaura prioridad base y espera cero.
+
+`SchedulerConfig` contiene prioridad mínima/máxima, `agingIntervaloMs` y `agingIncremento`, inicializados desde `contracts/Configuracion.h`. El quantum global pertenece al motor y su contrato; no es parámetro del Scheduler actual.
+
+## FIFO, Round Robin y trabajo del motor
+
+Una primera selección empatada favorece el menor orden de llegada. La rotación Round Robin no la crea el Scheduler: cuando un proceso consume turno y reingresa a READY, el **motor** debe actualizar su `ordenLlegada` (o el ticket equivalente aprobado) para colocarlo después de sus pares. La prueba de scheduler configura A con orden 3 y B con 2 de manera manual y entonces selecciona B; prueba la selección bajo el nuevo orden, no la actualización integrada.
+
+El motor concurrente revisado vuelve de `QUANTUM_AGOTADO` a READY sin actualizar `ordenLlegada`. Esta discrepancia puede impedir alternancia y está pendiente DP-05; no corregirla en esta tarea documental. Aging tampoco es el recálculo dinámico por tamaño: tienen objetivos y precedencia independientes (DP-10).
+
+## Entregables y pruebas
+
+- Implementación: `scheduler/Scheduler.h`, `scheduler/Scheduler.cpp`, `scheduler/SchedulerConfig.h`.
+- Pruebas: `tests/test_scheduler_prioridad.cpp`, `tests/test_scheduler_empate.cpp`, `tests/test_scheduler_aging.cpp`.
+
+Escenarios obligatorios recuperados:
+
+1. Prioridades READY A P8, B P5, C P3: elige A según la escala vigente del equipo.
+2. Filtrado: A WAIT P10 y B READY P5: elige B; RUN, FINISH y CANCEL tampoco compiten.
+3. Sin READY (WAIT/FINISH/CANCEL) y vector vacío: devuelve `-1`.
+4. Empate inicial A P8 llegada 1 y B P8 llegada 2: elige A incluso si el vector está invertido.
+5. Empate con misma prioridad y misma llegada: desempata con PID menor.
+6. Reingreso: después de quantum, A recibe orden más nuevo que B; elige B. La asignación del nuevo orden pertenece al motor.
+7. Aging: espera acumulada en READY cambia prioridad por intervalo; límite P10 no se supera; WAIT/RUN no acumulan aging; `alAsignarCPU` restaura prioridad base/espera.
+8. Cambio de selección por aging: con deltas suficientes y la prioridad restablecida del proceso atendido, el orden nuevo debe reflejar los valores actuales. La expectativa de prueba existente debe ser revisada como regla de equipo antes de modificar código.
+
+## Dependencias y criterios de aceptación
+
+Depende del contrato `Proceso` y sus estados. Puede probarse con vectores de procesos sintéticos y fixtures; no requiere GUI ni motor. Scheduler queda alineado cuando selecciona únicamente READY, respeta prioridades y desempates deterministas, produce cola visible ordenada, aplica aging según configuración, y el diseño deja explícito que motor actualiza el orden de reingreso. Los tests deben probar el Scheduler y la integración en niveles distintos. No implementa memoria, altas/bajas físicas, animaciones, Qt, threads, mutex ni timeline.

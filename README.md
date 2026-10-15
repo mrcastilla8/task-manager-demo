@@ -25,7 +25,7 @@ Los archivos académicos se mantienen fuera del repositorio. Sus páginas y marc
 
 En `origin/master`, los contratos compartidos están congelados en versión 1.0, el almacenamiento usa `std::list<Proceso>` y la memoria registra capacidad y tamaños cargados. El Scheduler y el motor concurrente están en ramas de integrantes; el motor lógico y la GUI no aparecen en las seis ramas auditadas. Qt 6 es una recomendación de la asignación de GUI, no una dependencia aprobada.
 
-La política actual del equipo documenta prioridades 1–10 (10 máxima), quantum global configurable de 500 ms y aging cada 2,000 ms simulados. No son requisitos del docente. `AssignPriority()` calcula prioridades 1–3 según el tamaño mínimo y máximo de la lista de tareas; su compatibilidad y recalculado están pendientes de aprobación.
+La política actual del equipo documenta prioridades 1–10 (10 máxima), quantum global configurable de 500 ms y aging cada 2,000 ms simulados. No son requisitos del docente. `AssignPriority()` asigna clases 1–3 por tamaño y `ObtenerMaximaPrioridad()` selecciona el valor mayor; por tanto, el algoritmo docente da precedencia a P3 sobre P2 y P1 (notas, págs. 24–25). Solo está pendiente decidir si se adopta esa escala o se adapta a 1–10 (DP-01); el conjunto de tareas y el recálculo dinámico se tratan por separado (DP-02).
 
 ## Construcción y pruebas
 

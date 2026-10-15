@@ -4,13 +4,13 @@ Las alternativas y propuestas de esta lista no están aprobadas. Resolverlas req
 
 ## DP-01 — Política prioritaria y compatibilidad de escalas
 
-**Alternativas:** conservar solo la política de equipo 1–10 con prioridad manual; adoptar clases docentes 1–3 calculadas por tamaño; o definir una transformación aprobada entre las clases 1–3 y la escala contractual 1–10.
+**Alternativas:** conservar la política de equipo 1–10 con prioridad manual; adoptar las clases docentes 1–3 calculadas por tamaño; o aprobar una transformación entre clases docentes y escala contractual 1–10.
 
-**Evidencia:** notas, pág. 24, `AssignPriority()` asigna 1–3; transcripción 00:11:02–00:14:22 explica el rango dinámico. El README y los contratos 1.0 fijan 1–10 y el mayor número como mayor prioridad.
+**Evidencia:** notas, pág. 24, `AssignPriority()` asigna 1 a pequeños, 2 a medianos y 3 a grandes; `ObtenerMaximaPrioridad()` en pág. 25 conserva el valor mayor, así que P3 precede a P2 y P1. La transcripción 00:11:02–00:14:22 explica el rango dinámico. README y contratos 1.0 fijan 1–10 y el mayor número como mayor prioridad.
 
-**Impacto:** campos base/actual, validación, scheduler, formulario GUI, ejemplos y contrato. La regla docente asocia tamaño pequeño con 1; con la semántica actual del scheduler esa clase tendría menos prioridad que 3.
+**Impacto:** validación, Scheduler, formulario GUI y ejemplos; una adaptación o sustitución puede exigir migración contractual. La precedencia interna de P1/P2/P3 no está pendiente; falta decidir únicamente si adoptar esa escala o adaptarla al modelo 1–10.
 
-**Propuesta para deliberar:** aclarar primero qué escala y sentido quería el docente para el simulador y si el equipo reemplaza o adapta su política. No definir una conversión unilateral.
+**Propuesta para deliberar:** decidir con el equipo si se reemplaza la política vigente por las clases docentes o si se aprueba una adaptación explícita. No definir una conversión unilateral.
 
 ## DP-02 — Conjunto usado por `AssignPriority()` y momentos de recálculo
 
@@ -24,11 +24,11 @@ Las alternativas y propuestas de esta lista no están aprobadas. Resolverlas req
 
 ## DP-03 — Igual tamaño y precisión de los umbrales
 
-**Alternativas:** conservar literalmente la consecuencia `A=B => H=0 => prioridad 3 para todo elemento`; definir un caso especial; o aclarar precisión/representación si tamaños admiten fracciones (el modelo actual usa bytes enteros).
+**Alternativas:** conservar literalmente la consecuencia `A=B => H=0 => prioridad 3 para todo elemento`; definir un caso especial; o precisar cómo se calcula `H` y se tratan los límites cuando `(B-A)` no es divisible por 3. El contrato actual representa tamaños en bytes enteros, no fracciones.
 
 **Evidencia:** `H=(B-A)/3` y límites estrictos `<` (notas, pág. 24); no hay ejemplo de tamaños iguales.
 
-**Impacto:** clasificación de casos degenerados y reglas de frontera. El pseudocódigo con aritmética de enteros puede truncar H si `B-A` no es divisible por 3; el tipo numérico de cálculo no está indicado.
+**Impacto:** clasificación de casos degenerados y reglas de frontera. Con tamaños enteros, una implementación puede truncar `H` por división entera si `B-A` no es divisible por 3; la fuente no indica el tipo numérico ni una regla de redondeo.
 
 **Propuesta para deliberar:** mantener los operadores `<` y confirmar con docente el caso A=B y la precisión antes de fijar una definición normativa completa.
 

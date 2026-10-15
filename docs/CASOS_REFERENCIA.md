@@ -43,6 +43,8 @@ Para clases docentes 1, 2 y 3, la fórmula ilustrativa de la transcripción `pri
 
 Con A READY P8, B READY P5 y C READY P3, la política de equipo selecciona A. Si A y B tienen igual prioridad actual, el desempate registrado usa menor `ordenLlegada`, con PID menor como desempate final. El FIFO de llegada debe distinguirse de la rotación posterior a un turno.
 
+En la escala académica, comparar un proceso P1, uno P2 y uno P3: `ObtenerMaximaPrioridad()` conserva el valor mayor, por lo que gana P3. Esto está respaldado por notas, págs. 24–25. La decisión pendiente no es el sentido del orden 1–3; es si el equipo adopta esa escala o la adapta a su escala 1–10 (DP-01).
+
 ## P6 — Rotación Round Robin y discrepancia integrada
 
 **Tipo:** test del scheduler reproducible; integración pendiente DP-05.

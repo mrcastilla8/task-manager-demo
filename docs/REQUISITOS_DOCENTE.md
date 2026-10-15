@@ -29,7 +29,7 @@ Ejemplo verificable: con tamaños mínimo `A=12` y máximo `B=96`, `H=28`. Tama�
 
 **RD-05 — Rangos dinámicos. CONFIRMADO_POR_DOCENTE como comportamiento explicado.** La transcripción explica que la llegada de un proceso mayor puede cambiar el rango y reclasificar como pequeño un proceso que antes estaba en una banda superior (T, 00:11:02–00:12:25 y 00:12:50–00:14:22). No precisa el conjunto de procesos incluido, el instante exacto de recálculo ni el tratamiento del proceso RUN. Esos detalles quedan pendientes.
 
-**RD-06 — Dirección de prioridad 1–3. CONFIRMADO_POR_DOCENTE en el ejemplo.** El profesor asocia tamaño pequeño con prioridad 1, mediano con 2 y grande con 3 (N, pág. 24; T, 00:11:50–00:12:07). Las fuentes no dicen cómo mapear estas clases a la escala de equipo 1–10, donde 10 es mayor. El sentido de selección debe aprobarse antes de integrar ambos modelos.
+**RD-06 — Precedencia de las clases 1–3. CONFIRMADO_POR_DOCENTE.** El algoritmo asigna 1 a tamaños pequeños, 2 a medianos y 3 a grandes (N, pág. 24); el procedimiento `ObtenerMaximaPrioridad()` recorre la lista y conserva el valor mayor (N, pág. 25). Por tanto, en el algoritmo presentado P3 tiene precedencia sobre P2 y P1. Lo único pendiente de esta escala es la decisión de adoptarla o adaptarla a la política de equipo 1–10 (DP-01); no está pendiente cuál de P1/P2/P3 es mayor en el algoritmo docente.
 
 **RD-07 — Caso de tamaños iguales. PENDIENTE_CONFIRMACION.** Aplicando literalmente `A=B`, `H=0`; ningún tamaño cumple `Size < A`, así que el pseudocódigo asigna 3 a todos. La fuente no comenta explícitamente este caso ni confirma que ese resultado sea el deseado. El caso se registra como consecuencia mecánica ilustrativa, no como decisión de política.
 
