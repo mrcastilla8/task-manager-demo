@@ -1,7 +1,6 @@
 #include "concurrent/ProcessThread.h"
 
 #include <algorithm>
-#include <chrono>
 
 ProcessThread::ProcessThread(int pid)
     : pid_(pid),
@@ -73,15 +72,6 @@ void ProcessThread::ejecutarLoopWorker() {
 
         if (detener_) {
             break;
-        }
-
-        if (solicitudActual_.retardoRealMs > 0) {
-            cvTurno_.wait_for(
-                lock, std::chrono::milliseconds(solicitudActual_.retardoRealMs),
-                [this]() { return detener_; });
-            if (detener_) {
-                break;
-            }
         }
 
         // Calculo de rafaga logica dentro del worker thread real
