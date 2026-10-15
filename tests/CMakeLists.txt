@@ -24,4 +24,5 @@ add_simulator_test(test_integracion)
 add_simulator_test(test_scheduler_prioridad)
 add_simulator_test(test_scheduler_empate)
 add_simulator_test(test_scheduler_aging)
+add_simulator_test(test_scheduler_config)
 

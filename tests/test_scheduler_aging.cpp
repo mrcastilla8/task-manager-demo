@@ -5,7 +5,7 @@
 int main() {
     Scheduler scheduler;
 
-    // Caso: Aging incrementa prioridad tras 2000 ms de espera
+    // Caso 1: Aging incremental en pasos acumulados de espera
     {
         std::vector<Proceso> procesos = {
             crearProceso(1, "A", 100, Estado::READY, 4),
@@ -27,7 +27,38 @@ int main() {
         EXPECT_EQ(procesos[0].tiempoEspera, 4'000);
     }
 
-    // Caso: No supera el límite máximo de prioridad (10)
+    // Caso 2: Salto con un solo delta grande (6,000 ms = 3 intervalos completos de 2,000 ms)
+    {
+        std::vector<Proceso> procesos = {
+            crearProceso(1, "A", 100, Estado::READY, 3),
+        };
+
+        scheduler.aplicarAging(procesos, 6'000);
+        EXPECT_EQ(procesos[0].prioridadActual, 6);
+        EXPECT_EQ(procesos[0].tiempoEspera, 6'000);
+    }
+
+    // Caso 3: Acumulación de deltas fraccionarios que cruzan el umbral
+    {
+        std::vector<Proceso> procesos = {
+            crearProceso(1, "A", 100, Estado::READY, 5),
+        };
+
+        scheduler.aplicarAging(procesos, 500);
+        EXPECT_EQ(procesos[0].prioridadActual, 5);
+        EXPECT_EQ(procesos[0].tiempoEspera, 500);
+
+        scheduler.aplicarAging(procesos, 1'499);
+        EXPECT_EQ(procesos[0].prioridadActual, 5);
+        EXPECT_EQ(procesos[0].tiempoEspera, 1'999);
+
+        // Al cruzar a 2,000 ms debe incrementar
+        scheduler.aplicarAging(procesos, 1);
+        EXPECT_EQ(procesos[0].prioridadActual, 6);
+        EXPECT_EQ(procesos[0].tiempoEspera, 2'000);
+    }
+
+    // Caso 4: No supera el límite máximo de prioridad (10)
     {
         std::vector<Proceso> procesos = {
             crearProceso(1, "A", 100, Estado::READY, 10),
@@ -35,23 +66,26 @@ int main() {
 
         scheduler.aplicarAging(procesos, 10'000);
         EXPECT_EQ(procesos[0].prioridadActual, 10);
+        EXPECT_EQ(procesos[0].tiempoEspera, 10'000);
     }
 
-    // Caso: Procesos que no están en READY no sufren aging
+    // Caso 5: Procesos que no están en READY no sufren aging
     {
         std::vector<Proceso> procesos = {
             crearProceso(1, "A", 100, Estado::WAIT, 4),
             crearProceso(2, "B", 100, Estado::RUN, 4),
+            crearProceso(3, "C", 100, Estado::FINISH, 4),
+            crearProceso(4, "D", 100, Estado::CANCEL, 4),
         };
 
         scheduler.aplicarAging(procesos, 4'000);
-        EXPECT_EQ(procesos[0].prioridadActual, 4);
-        EXPECT_EQ(procesos[0].tiempoEspera, 0);
-        EXPECT_EQ(procesos[1].prioridadActual, 4);
-        EXPECT_EQ(procesos[1].tiempoEspera, 0);
+        for (const auto& proc : procesos) {
+            EXPECT_EQ(proc.prioridadActual, 4);
+            EXPECT_EQ(proc.tiempoEspera, 0);
+        }
     }
 
-    // Caso: alAsignarCPU restablece la prioridad base y el tiempo de espera
+    // Caso 6: alAsignarCPU restablece la prioridad base y el tiempo de espera
     {
         Proceso proceso = crearProceso(1, "A", 100, Estado::READY, 4);
         std::vector<Proceso> vec = {proceso};
@@ -65,7 +99,7 @@ int main() {
         EXPECT_EQ(vec[0].tiempoEspera, 0);
     }
 
-    // Caso: Selección cambia dinámicamente gracias al aging
+    // Caso 7: Cambio dinámico de selección y reordenamiento de cola por aging (Caso P7)
     {
         std::vector<Proceso> procesos = {
             crearProceso(1, "A", 100, Estado::READY, 5),
@@ -74,15 +108,39 @@ int main() {
 
         EXPECT_EQ(scheduler.seleccionarSiguiente(procesos), 1);
 
-        // B espera 4000 ms -> sube a prioridad 6
+        // Tras 4,000 ms: A sube a 7, B sube a 6
         scheduler.aplicarAging(procesos, 4'000);
-        EXPECT_EQ(procesos[0].prioridadActual, 7); // A sube de 5 a 7
-        EXPECT_EQ(procesos[1].prioridadActual, 6); // B sube de 4 a 6
+        EXPECT_EQ(procesos[0].prioridadActual, 7);
+        EXPECT_EQ(procesos[1].prioridadActual, 6);
 
-        // Si A se atiende y se resetea:
+        // Si A es atendido, se le asigna CPU y se restablece
         scheduler.alAsignarCPU(procesos[0]);
-        // Ahora A tiene prioridadActual 5 y B tiene 6
+        EXPECT_EQ(procesos[0].prioridadActual, 5);
+        EXPECT_EQ(procesos[1].prioridadActual, 6);
+
+        // Ahora B (prioridad 6) debe ser seleccionado sobre A (prioridad 5)
         EXPECT_EQ(scheduler.seleccionarSiguiente(procesos), 2);
+
+        // Comprobamos que el orden visible de la cola también refleja este cambio
+        std::vector<int> orden = scheduler.ordenarColaPrioridad(procesos);
+        EXPECT_EQ(orden.size(), 2U);
+        EXPECT_EQ(orden[0], 2);
+        EXPECT_EQ(orden[1], 1);
+    }
+
+    // Caso 8: Delta no positivo (<= 0) es ignorado de forma segura
+    {
+        std::vector<Proceso> procesos = {
+            crearProceso(1, "A", 100, Estado::READY, 5),
+        };
+
+        scheduler.aplicarAging(procesos, 0);
+        EXPECT_EQ(procesos[0].prioridadActual, 5);
+        EXPECT_EQ(procesos[0].tiempoEspera, 0);
+
+        scheduler.aplicarAging(procesos, -500);
+        EXPECT_EQ(procesos[0].prioridadActual, 5);
+        EXPECT_EQ(procesos[0].tiempoEspera, 0);
     }
 
     return test::finish();

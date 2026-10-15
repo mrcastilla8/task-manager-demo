@@ -14,7 +14,7 @@ void Scheduler::configurar(const SchedulerConfig& config) noexcept {
 }
 
 int Scheduler::seleccionarSiguiente(
-    const std::vector<Proceso>& procesos) const {
+    const std::vector<Proceso>& procesos) const noexcept {
     const Proceso* mejor = nullptr;
 
     for (const auto& proceso : procesos) {
@@ -43,8 +43,8 @@ int Scheduler::seleccionarSiguiente(
 }
 
 void Scheduler::aplicarAging(std::vector<Proceso>& procesos,
-                             std::int64_t deltaTiempo) const {
-    if (deltaTiempo <= 0 || config_.agingIntervaloMs <= 0) {
+                             std::int64_t deltaTiempo) const noexcept {
+    if (deltaTiempo <= 0 || config_.agingIntervaloMs <= 0 || config_.agingIncremento <= 0) {
         return;
     }
 
@@ -53,15 +53,16 @@ void Scheduler::aplicarAging(std::vector<Proceso>& procesos,
             continue;
         }
 
-        const std::int64_t esperaPrevia = proceso.tiempoEspera;
-        proceso.tiempoEspera += deltaTiempo;
+        const std::int64_t esperaPrevia = std::max<std::int64_t>(0, proceso.tiempoEspera);
+        proceso.tiempoEspera = esperaPrevia + deltaTiempo;
 
         const std::int64_t intervalosPrevios =
             esperaPrevia / config_.agingIntervaloMs;
         const std::int64_t intervalosActuales =
             proceso.tiempoEspera / config_.agingIntervaloMs;
         const std::int64_t incrementoTotal =
-            (intervalosActuales - intervalosPrevios) * config_.agingIncremento;
+            (intervalosActuales - intervalosPrevios) *
+            static_cast<std::int64_t>(config_.agingIncremento);
 
         if (incrementoTotal > 0) {
             const auto nuevaPrioridad = static_cast<std::int64_t>(
@@ -89,7 +90,7 @@ std::vector<int> Scheduler::ordenarColaPrioridad(
     }
 
     std::sort(listos.begin(), listos.end(),
-              [](const Proceso* a, const Proceso* b) {
+              [](const Proceso* a, const Proceso* b) noexcept {
                   if (a->prioridadActual != b->prioridadActual) {
                       return a->prioridadActual > b->prioridadActual;
                   }
