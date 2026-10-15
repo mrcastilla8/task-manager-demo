@@ -1,0 +1,277 @@
+#include "scheduler/SchedulerV2.h"
+
+#include <algorithm>
+#include <climits>
+#include <stdexcept>
+
+namespace ConcurrentSimulator::v2 {
+
+namespace {
+
+inline bool perteneceATL(Estado estado) noexcept {
+    return estado == Estado::READY || estado == Estado::RUN || estado == Estado::WAIT;
+}
+
+template <typename Container>
+void clasificarInterno(Container& procesos) {
+    std::int64_t minA = INT64_MAX;
+    std::int64_t maxB = INT64_MIN;
+    bool hayTL = false;
+
+    for (const auto& proc : procesos) {
+        if (perteneceATL(proc.estado)) {
+            if (proc.tamanioBytes <= 0) {
+                throw std::invalid_argument(
+                    "Scheduler::clasificarPrioridades: proceso en TL con tamanio no positivo (<= 0)");
+            }
+            minA = std::min(minA, proc.tamanioBytes);
+            maxB = std::max(maxB, proc.tamanioBytes);
+            hayTL = true;
+        }
+    }
+
+    if (!hayTL) {
+        return;
+    }
+
+    for (auto& proc : procesos) {
+        if (perteneceATL(proc.estado)) {
+            proc.prioridad = Scheduler::evaluarPrioridad(proc.tamanioBytes, minA, maxB);
+        }
+    }
+}
+
+template <typename Container>
+bool hayReadySinTicketInterno(const Container& procesos) noexcept {
+    for (const auto& proceso : procesos) {
+        if (proceso.estado == Estado::READY &&
+            proceso.ticketReady == Scheduler::TICKET_SIN_ASIGNAR) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename Container>
+std::size_t contarReadyInterno(const Container& procesos) noexcept {
+    std::size_t total = 0;
+    for (const auto& proceso : procesos) {
+        if (proceso.estado == Estado::READY) {
+            ++total;
+        }
+    }
+    return total;
+}
+
+template <typename Container>
+std::size_t contarReadyValidosInterno(const Container& procesos) noexcept {
+    std::size_t validos = 0;
+    for (const auto& proceso : procesos) {
+        if (proceso.estado == Estado::READY &&
+            proceso.ticketReady != Scheduler::TICKET_SIN_ASIGNAR) {
+            ++validos;
+        }
+    }
+    return validos;
+}
+
+template <typename Container>
+int seleccionarSiguienteInterno(const Container& procesos) {
+    const Proceso* mejor = nullptr;
+    bool haySinTicket = false;
+
+    for (const auto& proceso : procesos) {
+        if (proceso.estado != Estado::READY) {
+            continue;
+        }
+
+        if (proceso.ticketReady == Scheduler::TICKET_SIN_ASIGNAR) {
+            haySinTicket = true;
+            continue;
+        }
+
+        if (mejor == nullptr) {
+            mejor = &proceso;
+            continue;
+        }
+
+        const auto prioActual = static_cast<std::uint8_t>(proceso.prioridad);
+        const auto prioMejor = static_cast<std::uint8_t>(mejor->prioridad);
+
+        if (prioActual > prioMejor) {
+            mejor = &proceso;
+        } else if (prioActual == prioMejor) {
+            if (proceso.ticketReady < mejor->ticketReady) {
+                mejor = &proceso;
+            } else if (proceso.ticketReady == mejor->ticketReady &&
+                       proceso.pid < mejor->pid) {
+                mejor = &proceso;
+            }
+        }
+    }
+
+    if (haySinTicket) {
+        throw std::logic_error(
+            "Scheduler::seleccionarSiguiente: existen procesos en estado READY con ticket sin asignar (0); "
+            "los procesos listos requieren un ticket valido antes de despachar y no deben confundirse con una cola vacia");
+    }
+
+    return mejor != nullptr ? mejor->pid : -1;
+}
+
+template <typename Container>
+std::vector<int> ordenarColaPrioridadInterno(const Container& procesos) {
+    std::vector<const Proceso*> listos;
+    bool haySinTicket = false;
+
+    for (const auto& proceso : procesos) {
+        if (proceso.estado == Estado::READY) {
+            if (proceso.ticketReady == Scheduler::TICKET_SIN_ASIGNAR) {
+                haySinTicket = true;
+            } else {
+                listos.push_back(&proceso);
+            }
+        }
+    }
+
+    if (haySinTicket) {
+        throw std::logic_error(
+            "Scheduler::ordenarColaPrioridad: existen procesos en estado READY con ticket sin asignar (0); "
+            "los procesos listos requieren un ticket valido para su ordenacion visual y no deben confundirse con una cola vacia");
+    }
+
+    std::sort(listos.begin(), listos.end(),
+              [](const Proceso* a, const Proceso* b) noexcept {
+                  const auto prioA = static_cast<std::uint8_t>(a->prioridad);
+                  const auto prioB = static_cast<std::uint8_t>(b->prioridad);
+
+                  if (prioA != prioB) {
+                      return prioA > prioB;
+                  }
+                  if (a->ticketReady != b->ticketReady) {
+                      return a->ticketReady < b->ticketReady;
+                  }
+                  return a->pid < b->pid;
+              });
+
+    std::vector<int> resultado;
+    resultado.reserve(listos.size());
+    for (const auto* proceso : listos) {
+        resultado.push_back(proceso->pid);
+    }
+
+    return resultado;
+}
+
+}  // namespace
+
+Prioridad Scheduler::evaluarPrioridad(std::int64_t tamanioBytes,
+                                     std::int64_t minA,
+                                     std::int64_t maxB) {
+    if (tamanioBytes <= 0 || minA <= 0 || maxB <= 0) {
+        throw std::invalid_argument(
+            "Scheduler::evaluarPrioridad: los tamanos deben ser estrictamente positivos (> 0)");
+    }
+    if (minA > maxB) {
+        throw std::invalid_argument("Scheduler::evaluarPrioridad: minA no puede ser mayor que maxB");
+    }
+    if (tamanioBytes < minA || tamanioBytes > maxB) {
+        throw std::invalid_argument("Scheduler::evaluarPrioridad: tamanioBytes fuera del intervalo [minA, maxB]");
+    }
+
+    if (minA == maxB) {
+        return Prioridad::P3;
+    }
+
+    const std::int64_t D = maxB - minA;
+    if (D <= 0) {
+        return Prioridad::P3;
+    }
+
+    const std::int64_t diff = tamanioBytes - minA;
+
+    // Evaluacion exacta y libre de overflow de: 3 * diff < D
+    constexpr std::int64_t limiteTercio = INT64_MAX / 3;
+    bool esP1 = false;
+    if (diff <= limiteTercio) {
+        esP1 = (3 * diff < D);
+    } else {
+        // Si diff > INT64_MAX / 3, entonces 3 * diff > INT64_MAX >= D, por tanto no puede ser menor que D
+        esP1 = false;
+    }
+
+    if (esP1) {
+        return Prioridad::P1;
+    }
+
+    // Evaluacion exacta y libre de overflow de: 3 * diff < 2 * D
+    // Equivalencia matematica: 3 * (maxB - tamanioBytes) > D
+    const std::int64_t diffB = maxB - tamanioBytes;
+    bool esP2 = false;
+    if (diffB <= 0) {
+        esP2 = false;
+    } else if (diffB > limiteTercio) {
+        // Si diffB > INT64_MAX / 3, entonces 3 * diffB > INT64_MAX >= D, lo cual es siempre verdadero
+        esP2 = true;
+    } else {
+        esP2 = (3 * diffB > D);
+    }
+
+    if (esP2) {
+        return Prioridad::P2;
+    }
+
+    return Prioridad::P3;
+}
+
+void Scheduler::clasificarPrioridades(std::vector<Proceso>& procesos) const {
+    clasificarInterno(procesos);
+}
+
+void Scheduler::clasificarPrioridades(std::list<Proceso>& procesos) const {
+    clasificarInterno(procesos);
+}
+
+int Scheduler::seleccionarSiguiente(const std::vector<Proceso>& procesos) const {
+    return seleccionarSiguienteInterno(procesos);
+}
+
+int Scheduler::seleccionarSiguiente(const std::list<Proceso>& procesos) const {
+    return seleccionarSiguienteInterno(procesos);
+}
+
+std::vector<int> Scheduler::ordenarColaPrioridad(
+    const std::vector<Proceso>& procesos) const {
+    return ordenarColaPrioridadInterno(procesos);
+}
+
+std::vector<int> Scheduler::ordenarColaPrioridad(
+    const std::list<Proceso>& procesos) const {
+    return ordenarColaPrioridadInterno(procesos);
+}
+
+bool Scheduler::hayReadySinTicket(const std::vector<Proceso>& procesos) const noexcept {
+    return hayReadySinTicketInterno(procesos);
+}
+
+bool Scheduler::hayReadySinTicket(const std::list<Proceso>& procesos) const noexcept {
+    return hayReadySinTicketInterno(procesos);
+}
+
+std::size_t Scheduler::contarReady(const std::vector<Proceso>& procesos) const noexcept {
+    return contarReadyInterno(procesos);
+}
+
+std::size_t Scheduler::contarReady(const std::list<Proceso>& procesos) const noexcept {
+    return contarReadyInterno(procesos);
+}
+
+std::size_t Scheduler::contarReadyValidos(const std::vector<Proceso>& procesos) const noexcept {
+    return contarReadyValidosInterno(procesos);
+}
+
+std::size_t Scheduler::contarReadyValidos(const std::list<Proceso>& procesos) const noexcept {
+    return contarReadyValidosInterno(procesos);
+}
+
+}  // namespace ConcurrentSimulator::v2
