@@ -344,8 +344,8 @@ void ConcurrentEngineV2::loopCoordinador() {
 }
 
 void ConcurrentEngineV2::abortarTurnoInterno() noexcept {
-    if (pidEjecutando_ >= 0) {
-        const int pid = pidEjecutando_;
+    const int pid = pidEjecutando_;
+    if (pid >= 0) {
         (void)procesos_.actualizarEstado(pid, Estado::READY);
         const auto despacho = std::find_if(
             eventos_.rbegin(), eventos_.rend(), [pid](const Evento& evento) {
@@ -359,6 +359,36 @@ void ConcurrentEngineV2::abortarTurnoInterno() noexcept {
     pidEjecutando_ = -1;
     cuotaTurnoFijadaMs_ = 0;
     cpuConsumidaTurnoMs_ = 0;
+
+    // Una solicitud RUN ya aceptada pertenece al PID, no al resultado del
+    // worker. Si el turno se revierte, se resuelve sobre el estado restaurado
+    // (READY y sin CPU confirmada) antes de responder al llamador.
+    if (pid >= 0 && cancelacionesPendientes_.erase(pid) != 0) {
+        try {
+            cancelarInterno(pid);
+        } catch (...) {
+            // Las reservas de eventos se hacen antes de despachar. Este camino
+            // defensivo garantiza que el coordinador siga vivo y que la
+            // cancelacion aceptada no vuelva a quedar pendiente tras un error.
+            (void)procesos_.actualizarEstado(pid, Estado::CANCEL);
+            esperas_.erase(std::remove_if(esperas_.begin(), esperas_.end(),
+                                          [pid](const Espera& espera) {
+                                              return espera.pid == pid;
+                                          }),
+                           esperas_.end());
+            ioConsumida_.erase(pid);
+            liberarMemoriaInterno(pid);
+            try {
+                registrarInterno(TipoEvento::PROCESO_CANCELADO, pid);
+                reclasificarInterno();
+                retirarWorkerInterno(pid);
+                finalizarSiCorrespondeInterno();
+            } catch (...) {
+                // No propagar al hilo coordinador. El siguiente paso queda
+                // habilitado incluso ante un fallo excepcional de recursos.
+            }
+        }
+    }
 }
 
 ResultadoPaso ConcurrentEngineV2::ejecutarPasoInterno(
@@ -559,6 +589,7 @@ ResultadoPaso ConcurrentEngineV2::ejecutarPasoInterno(
             const Proceso* despues = procesos_.buscar(pid);
             if (despues != nullptr && despues->estado != Estado::FINISH &&
                 despues->estado != Estado::CANCEL) {
+                cancelacionesPendientes_.erase(pid);
                 cancelarInterno(pid, false);
                 retirarWorker = true;
             }
@@ -601,29 +632,50 @@ ResultadoPaso ConcurrentEngineV2::ejecutarIdleInterno() {
         despertar = (std::min)(despertar, espera.despertarMs);
     }
     const std::int64_t inicio = relojMs_;
-    if (despertar > inicio) {
-        const std::int64_t delta = despertar - inicio;
-        if (!puedeAvanzarRelojInterno(delta)) {
-            return PASO_INVALIDO;
-        }
-        // Reserva de tickets antes de avanzar el reloj: asi un agotamiento no
-        // deja un salto idle a medias.
-        std::uint64_t despertaran = 0;
-        for (const Espera& espera : esperas_) {
-            const Proceso* proceso = procesos_.buscar(espera.pid);
-            if (espera.despertarMs <= despertar && proceso != nullptr &&
-                proceso->estado == Estado::WAIT) {
-                ++despertaran;
-            }
-        }
-        if (despertaran > ticketsDisponiblesInterno()) {
-            return PASO_INVALIDO;
-        }
-        registrarInterno(TipoEvento::CPU_IDLE_INICIO);
-        relojMs_ += delta;
-        registrarInterno(TipoEvento::CPU_IDLE_FIN);
+    const std::int64_t delta = despertar > inicio ? despertar - inicio : 0;
+    if (!puedeAvanzarRelojInterno(delta)) {
+        return PASO_INVALIDO;
     }
-    if (!despertarEsperasVencidasInterno()) {
+
+    std::uint64_t despertaran = 0;
+    for (const Espera& espera : esperas_) {
+        const Proceso* proceso = procesos_.buscar(espera.pid);
+        if (espera.despertarMs <= despertar && proceso != nullptr &&
+            proceso->estado == Estado::WAIT) {
+            ++despertaran;
+        }
+    }
+    if (despertaran > ticketsDisponiblesInterno()) {
+        return PASO_INVALIDO;
+    }
+
+    // Preparar copias antes de tocar el estado publicado. Si una reserva,
+    // asignacion de ticket, actualizacion de estado o evento falla, todo el
+    // salto se revierte bajo el mutex del motor.
+    ListaProcesos procesosAntes = procesos_;
+    AsignadorTickets ticketsAntes = asignadorTickets_;
+    const std::int64_t relojAntes = relojMs_;
+    std::vector<Espera> esperasAntes = esperas_;
+    const std::size_t eventosAntes = eventos_.size();
+    reservarEventosInterno(static_cast<std::size_t>(despertaran) + 2);
+
+    try {
+        inyectarFalloPaso(EtapaPasoPrueba::ANTES_CONFIRMAR_IDLE);
+        if (delta > 0) {
+            registrarInterno(TipoEvento::CPU_IDLE_INICIO);
+            relojMs_ = despertar;
+            registrarInterno(TipoEvento::CPU_IDLE_FIN);
+        }
+        inyectarFalloPaso(EtapaPasoPrueba::TRAS_EVENTOS_IDLE);
+        if (!despertarEsperasVencidasInterno(true)) {
+            throw std::logic_error("No se pudieron confirmar los despertares idle");
+        }
+    } catch (...) {
+        procesos_ = std::move(procesosAntes);
+        asignadorTickets_ = ticketsAntes;
+        relojMs_ = relojAntes;
+        esperas_ = std::move(esperasAntes);
+        eventos_.resize(eventosAntes);
         return PASO_INVALIDO;
     }
     return {CodigoResultado::OK, true, false, relojMs_ - inicio};
@@ -633,7 +685,7 @@ ResultadoPaso ConcurrentEngineV2::ejecutarIdleInterno() {
 // Helpers (requieren mutex_ tomado)
 // ---------------------------------------------------------------------------
 
-bool ConcurrentEngineV2::despertarEsperasVencidasInterno() {
+bool ConcurrentEngineV2::despertarEsperasVencidasInterno(bool inyectarFalloIdle) {
     std::vector<Espera> vencidas;
     for (const Espera& espera : esperas_) {
         const Proceso* proceso = procesos_.buscar(espera.pid);
@@ -646,28 +698,52 @@ bool ConcurrentEngineV2::despertarEsperasVencidasInterno() {
         return false;
     }
 
+    // El helper también puede ejecutarse al inicio de un paso (fuera de la
+    // transacción de una ráfaga). Protege ese caso para que cualquier excepción
+    // de ticket, transición o registro no publique un despertar parcial.
+    ListaProcesos procesosAntes = procesos_;
+    AsignadorTickets ticketsAntes = asignadorTickets_;
+    std::vector<Espera> esperasAntes = esperas_;
+    const std::size_t eventosAntes = eventos_.size();
+    reservarEventosInterno(vencidas.size());
+
     std::vector<std::uint64_t> tickets;
     tickets.reserve(vencidas.size());
-    for (std::size_t indice = 0; indice < vencidas.size(); ++indice) {
-        tickets.push_back(asignadorTickets_.asignar());
-    }
-    for (std::size_t indice = 0; indice < vencidas.size(); ++indice) {
-        const int pid = vencidas[indice].pid;
-        if (!procesos_.actualizarTicketReady(pid, tickets[indice]) ||
-            !procesos_.actualizarEstado(pid, Estado::READY)) {
-            throw std::logic_error("No se pudo despertar un proceso WAIT");
+    try {
+        for (std::size_t indice = 0; indice < vencidas.size(); ++indice) {
+            tickets.push_back(asignadorTickets_.asignar());
         }
-        registrarInterno(TipoEvento::WAIT_A_READY, pid);
+        if (inyectarFalloIdle) {
+            inyectarFalloPaso(EtapaPasoPrueba::TRAS_TICKETS_DESPERTAR_IDLE);
+        }
+        for (std::size_t indice = 0; indice < vencidas.size(); ++indice) {
+            const int pid = vencidas[indice].pid;
+            if (!procesos_.actualizarTicketReady(pid, tickets[indice]) ||
+                !procesos_.actualizarEstado(pid, Estado::READY)) {
+                throw std::logic_error("No se pudo despertar un proceso WAIT");
+            }
+            registrarInterno(TipoEvento::WAIT_A_READY, pid);
+            if (inyectarFalloIdle) {
+                inyectarFalloPaso(EtapaPasoPrueba::TRAS_ESTADO_DESPERTAR_IDLE);
+            }
+        }
+        esperas_.erase(std::remove_if(esperas_.begin(), esperas_.end(),
+                                      [this](const Espera& espera) {
+                                          return espera.despertarMs <= relojMs_;
+                                      }),
+                       esperas_.end());
+    } catch (...) {
+        procesos_ = std::move(procesosAntes);
+        asignadorTickets_ = ticketsAntes;
+        esperas_ = std::move(esperasAntes);
+        eventos_.resize(eventosAntes);
+        return false;
     }
-    esperas_.erase(std::remove_if(esperas_.begin(), esperas_.end(),
-                                  [this](const Espera& espera) {
-                                      return espera.despertarMs <= relojMs_;
-                                  }),
-                   esperas_.end());
     return true;
 }
 
 void ConcurrentEngineV2::cancelarInterno(int pid, bool retirarWorker) {
+    cancelacionesPendientes_.erase(pid);
     (void)procesos_.actualizarEstado(pid, Estado::CANCEL);
     esperas_.erase(std::remove_if(esperas_.begin(), esperas_.end(),
                                   [pid](const Espera& espera) {

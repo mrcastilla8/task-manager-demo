@@ -33,7 +33,11 @@ enum class EtapaAlta {
 
 enum class EtapaPasoPrueba {
     NINGUNA,
-    TRAS_SEGMENTO
+    TRAS_SEGMENTO,
+    ANTES_CONFIRMAR_IDLE,
+    TRAS_EVENTOS_IDLE,
+    TRAS_TICKETS_DESPERTAR_IDLE,
+    TRAS_ESTADO_DESPERTAR_IDLE
 };
 
 // Motor concurrente v2 (Integrante 4). Un CPU logico unico atendido por workers
@@ -94,7 +98,7 @@ private:
     // Todos los metodos *Interno exigen mutex_ tomado por el llamador.
     ResultadoPaso ejecutarPasoInterno(std::unique_lock<std::mutex>& lock);
     ResultadoPaso ejecutarIdleInterno();
-    bool despertarEsperasVencidasInterno();
+    bool despertarEsperasVencidasInterno(bool inyectarFalloIdle = false);
     void cancelarInterno(int pid, bool retirarWorker = true);
     void reclasificarInterno();
     void registrarInterno(TipoEvento tipo, int pid = -1,
