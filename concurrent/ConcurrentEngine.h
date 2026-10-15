@@ -63,6 +63,12 @@ private:
     void registrarEventoInterno(TipoEvento tipo, int pid, std::string descripcion);
     void detenerTodosLosWorkersInterno();
 
+    // Los siguientes metodos exigen mutexEstado_ tomado por el llamador.
+    bool todosTerminadosInterno() const;
+    void actualizarColaPrioridadInterno();
+    void avanzarEsperasIOInterno(std::int64_t delta);
+    void aplicarAgingAListosInterno(std::int64_t delta);
+
     mutable std::mutex mutexEstado_;
     std::condition_variable cvCoordinador_;
     std::condition_variable cvPasoCompletado_;
@@ -86,5 +92,5 @@ private:
 
     std::thread hiloCoordinador_;
     bool destruirCoordinador_{false};
-    int intervaloCoordinadorMs_{10};
+    std::atomic<int> intervaloCoordinadorMs_{10};
 };

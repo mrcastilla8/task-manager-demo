@@ -56,7 +56,7 @@ void ConcurrentEngine::agregarProceso(const Proceso& proceso) {
     registrarEventoInterno(TipoEvento::PROCESS_READY, admitido.pid,
                            "Proceso colocado en cola READY");
 
-    colaPrioridad_ = scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+    actualizarColaPrioridadInterno();
 
     if (estadoEjecucion_ == EstadoEjecucion::FINALIZADO) {
         estadoEjecucion_ = EstadoEjecucion::PAUSADO;
@@ -87,15 +87,9 @@ void ConcurrentEngine::cancelarProceso(int pid) {
     registrarEventoInterno(TipoEvento::PROCESS_CANCELLED, pid,
                            "Proceso cancelado por accion del usuario");
 
-    colaPrioridad_ = scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+    actualizarColaPrioridadInterno();
 
-    std::vector<Proceso> todos = colaProcesos_.obtenerTodos();
-    const bool todosTerminados = std::all_of(
-        todos.begin(), todos.end(), [](const Proceso& p) {
-            return p.estado == Estado::FINISH || p.estado == Estado::CANCEL;
-        });
-
-    if (todosTerminados) {
+    if (todosTerminadosInterno()) {
         estadoEjecucion_ = EstadoEjecucion::FINALIZADO;
     }
 }
@@ -262,12 +256,7 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         return;
     }
 
-    bool todosTerminados = std::all_of(
-        todos.begin(), todos.end(), [](const Proceso& p) {
-            return p.estado == Estado::FINISH || p.estado == Estado::CANCEL;
-        });
-
-    if (todosTerminados) {
+    if (todosTerminadosInterno()) {
         estadoEjecucion_ = EstadoEjecucion::FINALIZADO;
         pidEjecutando_ = -1;
         return;
@@ -292,23 +281,8 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
 
         if (menorEsperaWait > 0) {
             tiempoSimulado_ += menorEsperaWait;
-            for (auto& p : todos) {
-                if (p.estado == Estado::WAIT) {
-                    auto& io = trackingIO_[p.pid];
-                    io.tiempoEsperaRestanteMs -= menorEsperaWait;
-                    if (io.tiempoEsperaRestanteMs <= 0) {
-                        Proceso* procMod = colaProcesos_.buscar(p.pid);
-                        if (procMod != nullptr) {
-                            procMod->estado = Estado::READY;
-                            registrarEventoInterno(
-                                TipoEvento::PROCESS_READY, p.pid,
-                                "Fin de espera E/S, proceso retorna a READY");
-                        }
-                    }
-                }
-            }
-            colaPrioridad_ =
-                scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+            avanzarEsperasIOInterno(menorEsperaWait);
+            actualizarColaPrioridadInterno();
         } else {
             estadoEjecucion_ = EstadoEjecucion::FINALIZADO;
         }
@@ -327,6 +301,9 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         registrarEventoInterno(TipoEvento::PROCESS_RUNNING, siguientePid,
                                "Asignacion de CPU al proceso");
         scheduler_.alAsignarCPU(*proc);
+        // Mientras el worker ejecuta la rafaga el mutex queda libre y la GUI
+        // puede leer el snapshot: la cola READY ya no debe incluir al proceso RUN.
+        actualizarColaPrioridadInterno();
     }
 
     SolicitudTurno solicitud;
@@ -365,8 +342,7 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
     proc = colaProcesos_.buscar(siguientePid);
     if (proc == nullptr || proc->estado == Estado::CANCEL) {
         pidEjecutando_ = -1;
-        colaPrioridad_ =
-            scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+        actualizarColaPrioridadInterno();
         return;
     }
 
@@ -379,49 +355,8 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
             BloqueTimeline{siguientePid, tiempoSimulado_, tiempoSimulado_ + delta});
         tiempoSimulado_ += delta;
 
-        // Avanzar el tiempo de espera de procesos en WAIT
-        for (const auto& otra : colaProcesos_.obtenerTodos()) {
-            if (otra.estado == Estado::WAIT) {
-                auto& io = trackingIO_[otra.pid];
-                io.tiempoEsperaRestanteMs -= delta;
-                if (io.tiempoEsperaRestanteMs <= 0) {
-                    Proceso* enEspera = colaProcesos_.buscar(otra.pid);
-                    if (enEspera != nullptr) {
-                        enEspera->estado = Estado::READY;
-                        registrarEventoInterno(
-                            TipoEvento::PROCESS_READY, otra.pid,
-                            "Fin de espera E/S, proceso retorna a READY");
-                    }
-                }
-            }
-        }
-
-        // Aplicar aging a los demas procesos READY
-        std::vector<Proceso> listosParaAging =
-            colaProcesos_.obtenerPorEstado(Estado::READY);
-        for (auto& listo : listosParaAging) {
-            if (listo.pid != siguientePid) {
-                const int prioAnterior = listo.prioridadActual;
-                std::vector<Proceso> vectorIndividual = {listo};
-                scheduler_.aplicarAging(vectorIndividual, delta);
-                if (vectorIndividual[0].prioridadActual != prioAnterior) {
-                    Proceso* pAging = colaProcesos_.buscar(listo.pid);
-                    if (pAging != nullptr) {
-                        pAging->prioridadActual =
-                            vectorIndividual[0].prioridadActual;
-                        pAging->tiempoEspera = vectorIndividual[0].tiempoEspera;
-                        registrarEventoInterno(
-                            TipoEvento::PRIORITY_CHANGED, listo.pid,
-                            "Prioridad incrementada por aging");
-                    }
-                } else {
-                    Proceso* pAging = colaProcesos_.buscar(listo.pid);
-                    if (pAging != nullptr) {
-                        pAging->tiempoEspera += delta;
-                    }
-                }
-            }
-        }
+        avanzarEsperasIOInterno(delta);
+        aplicarAgingAListosInterno(delta);
     }
 
     // Resolucion de transicion de fin de rafaga
@@ -458,16 +393,61 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
                                "Proceso cancelado durante la ejecucion");
     }
 
-    colaPrioridad_ = scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+    actualizarColaPrioridadInterno();
 
-    std::vector<Proceso> todosFinales = colaProcesos_.obtenerTodos();
-    const bool todosTerminadosAlFinal = std::all_of(
-        todosFinales.begin(), todosFinales.end(), [](const Proceso& p) {
-            return p.estado == Estado::FINISH || p.estado == Estado::CANCEL;
-        });
-
-    if (todosTerminadosAlFinal) {
+    if (todosTerminadosInterno()) {
         estadoEjecucion_ = EstadoEjecucion::FINALIZADO;
+    }
+}
+
+bool ConcurrentEngine::todosTerminadosInterno() const {
+    const std::vector<Proceso> todos = colaProcesos_.obtenerTodos();
+    return std::all_of(todos.begin(), todos.end(), [](const Proceso& p) {
+        return p.estado == Estado::FINISH || p.estado == Estado::CANCEL;
+    });
+}
+
+void ConcurrentEngine::actualizarColaPrioridadInterno() {
+    colaPrioridad_ = scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+}
+
+void ConcurrentEngine::avanzarEsperasIOInterno(std::int64_t delta) {
+    for (const auto& p : colaProcesos_.obtenerPorEstado(Estado::WAIT)) {
+        auto& io = trackingIO_[p.pid];
+        io.tiempoEsperaRestanteMs -= delta;
+        if (io.tiempoEsperaRestanteMs <= 0) {
+            Proceso* enEspera = colaProcesos_.buscar(p.pid);
+            if (enEspera != nullptr) {
+                enEspera->estado = Estado::READY;
+                registrarEventoInterno(
+                    TipoEvento::PROCESS_READY, p.pid,
+                    "Fin de espera E/S, proceso retorna a READY");
+            }
+        }
+    }
+}
+
+void ConcurrentEngine::aplicarAgingAListosInterno(std::int64_t delta) {
+    std::vector<Proceso> listos = colaProcesos_.obtenerPorEstado(Estado::READY);
+    std::vector<int> prioridadesPrevias;
+    prioridadesPrevias.reserve(listos.size());
+    for (const auto& listo : listos) {
+        prioridadesPrevias.push_back(listo.prioridadActual);
+    }
+
+    scheduler_.aplicarAging(listos, delta);
+
+    for (std::size_t i = 0; i < listos.size(); ++i) {
+        Proceso* original = colaProcesos_.buscar(listos[i].pid);
+        if (original == nullptr) {
+            continue;
+        }
+        original->tiempoEspera = listos[i].tiempoEspera;
+        if (listos[i].prioridadActual != prioridadesPrevias[i]) {
+            original->prioridadActual = listos[i].prioridadActual;
+            registrarEventoInterno(TipoEvento::PRIORITY_CHANGED, listos[i].pid,
+                                   "Prioridad incrementada por aging");
+        }
     }
 }
 

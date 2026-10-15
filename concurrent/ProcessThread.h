@@ -34,7 +34,6 @@ private:
     void ejecutarLoopWorker();
 
     int pid_;
-    std::thread worker_;
     mutable std::mutex mutex_;
     std::condition_variable cvTurno_;
     std::condition_variable cvFinTurno_;
@@ -45,4 +44,9 @@ private:
 
     SolicitudTurno solicitudActual_;
     ResultadoRafaga resultadoActual_;
+
+    // Debe declararse al final: el hilo arranca al construir este miembro y
+    // necesita que el mutex, las variables de condicion y las banderas ya
+    // existan. Tambien se destruye primero.
+    std::thread worker_;
 };
