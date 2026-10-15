@@ -5,6 +5,10 @@ fuente: [decisiones aprobadas](../docs/DECISIONES_APROBADAS.md#dp-08--gui-y-time
 Esta aplicación es una preparación de vistas en `poma`, no la integración final
 ni la adopción de la API candidata. No modifica `core/` ni `contracts/`.
 
+La entrega del avance se publica desde la rama `poma` para revisión en el
+[PR #6](https://github.com/mrcastilla8/task-manager-demo/pull/6), dirigido a
+`master` y mantenido en borrador mientras falten los gates de integración.
+
 ## Construcción y ejecución
 
 Requiere CMake 3.20+, Qt 6.2+ Widgets/Test y un compilador compatible con ese SDK.
