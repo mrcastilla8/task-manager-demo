@@ -71,7 +71,6 @@ public:
 
     /**
      * @brief Selecciona el PID del proceso en estado READY que debe recibir CPU logico.
-     *        Excluye estrictamente procesos con ticket sin asignar (ticketReady == 0).
      *
      * Criterio determinista estricto (DP-05):
      * 1. Mayor prioridad (P3 > P2 > P1).
@@ -79,23 +78,44 @@ public:
      * 3. Menor PID (desempate estricto final).
      *
      * @param procesos Lista completa de procesos del sistema.
-     * @return PID del proceso READY seleccionado, o -1 si no hay procesos READY despachables.
+     * @return PID del proceso READY seleccionado, o -1 si la cola esta vacia (sin procesos READY).
+     * @throws std::logic_error si existen procesos en estado READY con ticket sin asignar (0).
+     *         Esto garantiza que una falta de ticket no se confunda con una cola vacia.
      */
-    int seleccionarSiguiente(const std::vector<Proceso>& procesos) const noexcept;
-    int seleccionarSiguiente(const std::list<Proceso>& procesos) const noexcept;
+    int seleccionarSiguiente(const std::vector<Proceso>& procesos) const;
+    int seleccionarSiguiente(const std::list<Proceso>& procesos) const;
 
     /**
      * @brief Devuelve los PIDs de los procesos en estado READY ordenados segun el
      *        orden de despacho efectivo para la cola visual de la GUI.
-     *        Excluye estrictamente procesos con ticketReady == 0.
      *
      * Sigue exactamente el mismo criterio de ordenacion que `seleccionarSiguiente`.
      *
      * @param procesos Lista completa de procesos del sistema.
      * @return Vector con PIDs de procesos READY en orden de despacho.
+     * @throws std::logic_error si existen procesos en estado READY con ticket sin asignar (0).
      */
     std::vector<int> ordenarColaPrioridad(const std::vector<Proceso>& procesos) const;
     std::vector<int> ordenarColaPrioridad(const std::list<Proceso>& procesos) const;
+
+    /**
+     * @brief Indica si existen procesos en estado READY con ticket sin asignar (ticketReady == 0).
+     *        Permite a los motores de ejecucion validar defensivamente la cola antes del despacho.
+     */
+    bool hayReadySinTicket(const std::vector<Proceso>& procesos) const noexcept;
+    bool hayReadySinTicket(const std::list<Proceso>& procesos) const noexcept;
+
+    /**
+     * @brief Cuenta la cantidad total de procesos en estado READY (con o sin ticket).
+     */
+    std::size_t contarReady(const std::vector<Proceso>& procesos) const noexcept;
+    std::size_t contarReady(const std::list<Proceso>& procesos) const noexcept;
+
+    /**
+     * @brief Cuenta la cantidad de procesos en estado READY con ticket valido (ticketReady > 0).
+     */
+    std::size_t contarReadyValidos(const std::vector<Proceso>& procesos) const noexcept;
+    std::size_t contarReadyValidos(const std::list<Proceso>& procesos) const noexcept;
 };
 
 /**
@@ -106,17 +126,27 @@ class AsignadorTickets {
 public:
     explicit AsignadorTickets(std::uint64_t inicial = 1) : siguiente_(inicial) {
         if (inicial == Scheduler::TICKET_SIN_ASIGNAR) {
-            throw std::invalid_argument("AsignadorTickets: el ticket inicial debe ser mayor a 0");
+            throw std::invalid_argument("AsignadorTickets: el ticket inicial no puede ser 0 (TICKET_SIN_ASIGNAR)");
         }
     }
 
     /**
      * @brief Asigna el siguiente ticket estrictamente creciente.
-     * @throws std::overflow_error si se alcanza el limite maximo de uint64_t (Propuesta 11).
+     *
+     * POLITICA PROVISIONAL DE OVERFLOW (DP-05 / Propuesta Tecnica 11):
+     * La coordinacion del equipo tiene pendiente de ratificacion la politica definitiva ante
+     * el agotamiento de uint64_t (elegir entre lanzar error de limite o renumerar de forma
+     * estable la cola READY en un punto pausado).
+     * De forma PROVISIONAL y defensiva, esta implementacion lanza std::overflow_error para
+     * impedir desbordamientos silenciosos (wrap-around) que corromperian el orden FIFO.
+     *
+     * @throws std::overflow_error si se alcanza el limite maximo de uint64_t.
      */
     std::uint64_t asignar() {
         if (siguiente_ == UINT64_MAX) {
-            throw std::overflow_error("AsignadorTickets: desbordamiento de tickets READY (uint64_t agotado)");
+            throw std::overflow_error(
+                "AsignadorTickets: desbordamiento de tickets READY (uint64_t agotado) "
+                "[politica provisional pendiente de ratificacion]");
         }
         return siguiente_++;
     }
@@ -129,7 +159,22 @@ public:
     }
 
     std::uint64_t proximo() const noexcept { return siguiente_; }
-    void reiniciar(std::uint64_t valor = 1) noexcept { siguiente_ = valor; }
+
+    /**
+     * @brief Reinicia el contador de tickets a un valor inicial (por defecto 1).
+     *        PRECAUCION: Solo debe invocarse al reiniciar una sesion completa de simulacion
+     *        (cuando la lista de procesos ha sido vaciada), para evitar emitir tickets
+     *        duplicados a procesos que ya se encuentren en el sistema.
+     * @param valor Valor inicial de reinicio (debe ser > 0).
+     * @throws std::invalid_argument si valor es 0 (TICKET_SIN_ASIGNAR).
+     */
+    void reiniciar(std::uint64_t valor = 1) {
+        if (valor == Scheduler::TICKET_SIN_ASIGNAR) {
+            throw std::invalid_argument(
+                "AsignadorTickets::reiniciar: el ticket inicial no puede ser 0 (TICKET_SIN_ASIGNAR)");
+        }
+        siguiente_ = valor;
+    }
 
 private:
     std::uint64_t siguiente_{1};

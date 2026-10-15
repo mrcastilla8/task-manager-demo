@@ -134,5 +134,62 @@ int main() {
         EXPECT_EQ(cola[1], 2);
     }
 
+    // Caso 7: AsignadorTickets defensivo: inicio > 0, reiniciar(0) invalido y politica provisional de overflow
+    {
+        // Ticket inicial 0 es invalido
+        EXPECT_THROW(AsignadorTickets(0), std::invalid_argument);
+
+        AsignadorTickets asignador(1);
+        EXPECT_EQ(asignador.asignar(), 1U);
+        EXPECT_EQ(asignador.asignar(), 2U);
+
+        // reiniciar(0) debe ser rechazado
+        EXPECT_THROW(asignador.reiniciar(0), std::invalid_argument);
+
+        // reiniciar a valor valido
+        asignador.reiniciar(100);
+        EXPECT_EQ(asignador.asignar(), 100U);
+
+        // Politica provisional de desbordamiento (UINT64_MAX)
+        AsignadorTickets asignadorLimite(UINT64_MAX - 1);
+        EXPECT_EQ(asignadorLimite.asignar(), UINT64_MAX - 1);
+        EXPECT_THROW(asignadorLimite.asignar(), std::overflow_error);
+    }
+
+    // Caso 8: Procesos en estado READY con ticket sin asignar no deben confundirse con cola vacia (DP-05)
+    {
+        // 1. Cola verdaderamente vacia: seleccionarSiguiente retorna -1 de forma segura
+        std::vector<Proceso> vacia;
+        EXPECT_EQ(scheduler.seleccionarSiguiente(vacia), -1);
+        EXPECT_FALSE(scheduler.hayReadySinTicket(vacia));
+        EXPECT_EQ(scheduler.contarReady(vacia), 0U);
+        EXPECT_EQ(scheduler.contarReadyValidos(vacia), 0U);
+
+        // 2. Proceso en WAIT o FINISH sin ticket no es READY -> cola sigue considerandose vacia para despacho
+        std::vector<Proceso> otros = {
+            crearProcesoV2(1, "WaitSinTicket", 50, Prioridad::P2, 0, Estado::WAIT),
+            crearProcesoV2(2, "FinishSinTicket", 50, Prioridad::P2, 0, Estado::FINISH),
+        };
+        EXPECT_EQ(scheduler.seleccionarSiguiente(otros), -1);
+        EXPECT_FALSE(scheduler.hayReadySinTicket(otros));
+
+        // 3. Proceso en READY con ticket sin asignar (ticketReady == 0)
+        // No debe retornar -1 (lo que senalaria cola vacia), sino lanzar std::logic_error
+        std::vector<Proceso> readySinTicket = {
+            crearProcesoV2(10, "ReadySinTicket", 50, Prioridad::P2, 0, Estado::READY),
+        };
+        EXPECT_TRUE(scheduler.hayReadySinTicket(readySinTicket));
+        EXPECT_EQ(scheduler.contarReady(readySinTicket), 1U);
+        EXPECT_EQ(scheduler.contarReadyValidos(readySinTicket), 0U);
+        EXPECT_THROW(scheduler.seleccionarSiguiente(readySinTicket), std::logic_error);
+        EXPECT_THROW(scheduler.ordenarColaPrioridad(readySinTicket), std::logic_error);
+
+        // 4. Al asignarle un ticket valido, se despacha normalmente
+        readySinTicket[0].ticketReady = 1;
+        EXPECT_FALSE(scheduler.hayReadySinTicket(readySinTicket));
+        EXPECT_EQ(scheduler.contarReadyValidos(readySinTicket), 1U);
+        EXPECT_EQ(scheduler.seleccionarSiguiente(readySinTicket), 10);
+    }
+
     return test::finish();
 }
