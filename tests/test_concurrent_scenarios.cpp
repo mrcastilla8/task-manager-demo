@@ -84,8 +84,9 @@ int main() {
         EXPECT_TRUE(tiposDeEventos(s, 1) == esperados);
     }
 
-    // Caso 2: aging eleva a un proceso de baja prioridad hasta superar al
-    // dominante, y la cola READY del snapshot nunca incluye al proceso en RUN.
+    // Caso 2 (heredado de v1; DP-10 retira el aging en v2): aging eleva a un
+    // proceso de baja prioridad hasta igualar al dominante, y la cola READY del
+    // snapshot nunca incluye al proceso en RUN.
     {
         ConcurrentEngine engine(2048);
         engine.configurarQuantum(500);
@@ -116,15 +117,16 @@ int main() {
             [](const BloqueTimeline& bloque) { return bloque.pid == 2; });
         EXPECT_TRUE(bloqueB != s.timeline.end());
         if (bloqueB != s.timeline.end()) {
-            // B espera 6 intervalos de 2,000 ms: 3 -> 9 supera a A (8).
-            EXPECT_EQ(bloqueB->inicio, 12000);
+            // B espera 5 intervalos de 2,000 ms: 3 -> 8 iguala a A; B gana el
+            // empate por tener un ticket mas antiguo (A reingreso tras cada cuota).
+            EXPECT_EQ(bloqueB->inicio, 10000);
         }
 
         const auto cambiosB = std::count_if(
             s.eventos.begin(), s.eventos.end(), [](const Evento& e) {
                 return e.pid == 2 && e.tipo == TipoEvento::PRIORITY_CHANGED;
             });
-        EXPECT_EQ(cambiosB, 6);
+        EXPECT_EQ(cambiosB, 5);
 
         // Al recibir CPU recupera su prioridad base y sin espera acumulada.
         EXPECT_EQ(buscarProceso(s, 2)->prioridadActual, 3);

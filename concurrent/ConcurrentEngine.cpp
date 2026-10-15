@@ -44,6 +44,7 @@ void ConcurrentEngine::agregarProceso(const Proceso& proceso) {
     admitido.tiempoRestante = admitido.tiempoTotal;
     admitido.tiempoEspera = 0;
     admitido.quantumConsumido = 0;
+    admitido.ordenLlegada = siguienteTicket_++;
 
     colaProcesos_.agregar(admitido);
     workers_[admitido.pid] = std::make_unique<ProcessThread>(admitido.pid);
@@ -137,6 +138,7 @@ void ConcurrentEngine::reiniciar() {
         memoria_ = Memoria(capacidad);
         colaProcesos_ = ColaProcesos{};
         trackingIO_.clear();
+        siguienteTicket_ = 1;
 
         tiempoSimulado_ = 0;
         pidEjecutando_ = -1;
@@ -411,12 +413,14 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         trackingIO_[siguientePid].tiempoEsperaRestanteMs =
             proc->operacionIO.duracionEsperaMs;
         proc->quantumConsumido = 0;
+        proc->ordenLlegada = siguienteTicket_++;  // ticket de bloqueo (desempate)
         registrarEventoInterno(TipoEvento::PROCESS_WAITING, siguientePid,
                                "Proceso pasa a WAIT por inicio de E/S");
     } else if (resultado.motivo == MotivoFinTurno::QUANTUM_AGOTADO) {
         proc->estado = Estado::READY;
         pidEjecutando_ = -1;
         proc->quantumConsumido = 0;
+        proc->ordenLlegada = siguienteTicket_++;  // Round Robin: ticket nuevo
         registrarEventoInterno(TipoEvento::QUANTUM_FINISHED, siguientePid,
                                "Proceso agoto su quantum asignado");
         registrarEventoInterno(TipoEvento::PROCESS_READY, siguientePid,
@@ -448,17 +452,39 @@ void ConcurrentEngine::actualizarColaPrioridadInterno() {
 }
 
 void ConcurrentEngine::avanzarEsperasIOInterno(std::int64_t delta) {
+    std::vector<int> despertados;
     for (const auto& p : colaProcesos_.obtenerPorEstado(Estado::WAIT)) {
         auto& io = trackingIO_[p.pid];
         io.tiempoEsperaRestanteMs -= delta;
         if (io.tiempoEsperaRestanteMs <= 0) {
-            Proceso* enEspera = colaProcesos_.buscar(p.pid);
-            if (enEspera != nullptr) {
-                enEspera->estado = Estado::READY;
-                registrarEventoInterno(
-                    TipoEvento::PROCESS_READY, p.pid,
-                    "Fin de espera E/S, proceso retorna a READY");
-            }
+            despertados.push_back(p.pid);
+        }
+    }
+
+    // Orden determinista de reingreso: instante de despertar (un restante mas
+    // negativo despierto antes), ticket asignado al bloquear y PID.
+    std::sort(despertados.begin(), despertados.end(), [this](int a, int b) {
+        const auto restanteA = trackingIO_[a].tiempoEsperaRestanteMs;
+        const auto restanteB = trackingIO_[b].tiempoEsperaRestanteMs;
+        if (restanteA != restanteB) {
+            return restanteA < restanteB;
+        }
+        const auto ticketA = colaProcesos_.buscar(a)->ordenLlegada;
+        const auto ticketB = colaProcesos_.buscar(b)->ordenLlegada;
+        if (ticketA != ticketB) {
+            return ticketA < ticketB;
+        }
+        return a < b;
+    });
+
+    for (int pid : despertados) {
+        Proceso* enEspera = colaProcesos_.buscar(pid);
+        if (enEspera != nullptr) {
+            enEspera->estado = Estado::READY;
+            enEspera->ordenLlegada = siguienteTicket_++;
+            registrarEventoInterno(
+                TipoEvento::PROCESS_READY, pid,
+                "Fin de espera E/S, proceso retorna a READY");
         }
     }
 }

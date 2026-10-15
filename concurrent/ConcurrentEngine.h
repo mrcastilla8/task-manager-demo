@@ -85,6 +85,9 @@ private:
 
     std::unordered_map<int, std::unique_ptr<ProcessThread>> workers_;
     std::unordered_map<int, InfoIO> trackingIO_;
+    // Ticket estrictamente creciente asignado en cada ingreso a READY (alta,
+    // retorno de WAIT y fin de cuota). Se almacena en Proceso::ordenLlegada.
+    std::int64_t siguienteTicket_{1};
 
     std::int64_t tiempoSimulado_{0};
     EstadoEjecucion estadoEjecucion_{EstadoEjecucion::DETENIDO};
