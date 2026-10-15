@@ -1,5 +1,21 @@
 # Decisiones pendientes para ConcurrentSimulator
 
+> **Cierre Fase 0, formalizado 2026-10-15:** DP-01–DP-11 constan como acuerdos aprobados en [DECISIONES_APROBADAS.md](DECISIONES_APROBADAS.md); la fecha exacta de aprobación original no está informada. Las alternativas de los apartados siguientes son historial de deliberación; no representan opciones actualmente abiertas ni política v2. v1.0 sigue vigente para el código presente. Precisiones de implementación no ratificadas están separadas como propuestas técnicas en el registro aprobado.
+
+| Decisión histórica | Cerrada | Registro normativo |
+|---|---|---|
+| DP-01 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-01--prioridades) |
+| DP-02 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-02--población-y-recalculo) |
+| DP-03 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-03--algoritmo-exacto) |
+| DP-04 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-04--cuotas-individuales) |
+| DP-05 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-05--cola-y-round-robin) |
+| DP-06 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-06--estados-y-cancelación) |
+| DP-07 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-07--paso-y-tiempo-simulado) |
+| DP-08 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-08--gui-y-timeline) |
+| DP-09 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-09--estructura-enlazada) |
+| DP-10 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-10--aging) |
+| DP-11 | Formalizada 2026-10-15; fecha exacta de aprobación original desconocida | [Decisión aprobada](DECISIONES_APROBADAS.md#dp-11--interfaz-y-motores) |
+
 Las alternativas y propuestas de esta lista no están aprobadas. Resolverlas requiere acuerdo del equipo y, cuando corresponda, consulta al docente. El orden refleja impacto sobre contratos, módulos e interoperabilidad.
 
 ## DP-01 — Política prioritaria y compatibilidad de escalas
@@ -104,10 +120,10 @@ Las alternativas y propuestas de esta lista no están aprobadas. Resolverlas req
 
 ## DP-11 — Toolkit de GUI y dos motores
 
-**Alternativas:** confirmar Qt 6; elegir otra biblioteca; mantener ambos motores de equipo; o simplificar a un motor si el equipo lo acuerda.
+**Alternativas históricas (cerradas por DP-11):** confirmar Qt 6; elegir otra biblioteca; mantener ambos motores de equipo; o simplificar a un motor. DP-11a/b ya seleccionan Qt 6 y dos motores con interfaz/Scheduler comunes para el destino v2.
 
-**Evidencia:** documento de Poma recomienda Qt 6; el código revisado no contiene GUI Qt ni motor lógico. La explicación docente describe CPU lógico por turnos y no obliga a usar hilos reales ni dos arquitecturas.
+**Evidencia registrada antes del cierre:** documento de Poma recomendaba Qt 6; el código revisado no contenía GUI Qt ni motor lógico. La explicación docente describe CPU lógico por turnos y no obliga a usar hilos reales ni dos arquitecturas. Esa distinción de procedencia se conserva, mientras la decisión del equipo ya está cerrada.
 
 **Impacto:** build, integración, plataforma, seguridad de GUI y costo de mantener equivalencia.
 
-**Propuesta para deliberar:** ratificar toolkit y alcance de dos motores en decisión explícita del equipo. Hasta entonces Qt es recomendación y los dos motores, arquitectura acordada de equipo.
+**Resultado actual:** DP-11 aprueba Qt 6 y dos motores de equipo para v2. Este documento solo conserva el historial de deliberación; sus antiguas alternativas no son pendientes.

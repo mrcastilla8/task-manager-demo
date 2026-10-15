@@ -1,5 +1,7 @@
 # Requisitos del docente para ConcurrentSimulator
 
+> **Distinción (2026-10-15):** DP-01–DP-11 en [DECISIONES_APROBADAS.md](DECISIONES_APROBADAS.md) son acuerdos internos de coordinación para v2, no nueva evidencia ni obligaciones del profesor. Este archivo preserva únicamente fuentes y localizadores académicos; cuando el equipo adopta una decisión más específica, se etiqueta `DECISION_EQUIPO` y no se reescribe la fuente histórica.
+
 Este documento reúne solo las partes pertinentes de las notas de clase y la explicación del 1 de octubre de 2026. Los materiales originales no se incluyen en el repositorio. Las páginas y marcas de tiempo son localizadores de las copias proporcionadas para esta auditoría. La clasificación describe la evidencia disponible; una regla explícita puede dejar detalles de implementación pendientes.
 
 ## Fuentes consultadas
@@ -19,7 +21,7 @@ Los ejercicios de QR, multiplicación de matrices, speedup y grafos de dependenc
 
 **RD-02 — Procesos dinámicos. CONFIRMADO_POR_DOCENTE.** Nuevos procesos ingresan para almacenarse en memoria y ejecutarse, y otros terminan (N, pág. 25; T, 00:08:25–00:08:52). El detalle de admisión cuando la memoria no alcanza no queda fijado por estas fuentes.
 
-**RD-03 — Estructura de cola. CONFIRMADO_POR_DOCENTE como intención de implementación; obligatoriedad para la entrega PENDIENTE_CONFIRMACION.** La fuente dice: “Se va implementar un modelo dinámico basado en una estructura de lista enlazada simple que posee 2 punteros, al inicio y al final” (N, pág. 25). Se conserva literalmente esa intención: lista simple dinámica con referencias de inicio y final. La fuente disponible no confirma si esa estructura concreta es condición de aceptación de la entrega. La misma página contiene pseudocódigo incompleto o internamente inconsistente para insertar y buscar prioridades; ese pseudocódigo no reemplaza los contratos actuales ni define la API.
+**RD-03 — Estructura de cola. CONFIRMADO_POR_DOCENTE como intención de implementación.** La fuente dice: “Se va implementar un modelo dinámico basado en una estructura de lista enlazada simple que posee 2 punteros, al inicio y al final” (N, pág. 25). Se conserva literalmente esa intención. DP-09 adopta lista simple para el trabajo v2 futuro; la fuente por sí sola no confirma si es condición de aceptación de la entrega. La misma página contiene pseudocódigo incompleto o internamente inconsistente para insertar y buscar prioridades; ese pseudocódigo no reemplaza contratos ni define la API.
 
 ### Prioridad basada en tamaños
 
@@ -27,11 +29,11 @@ Los ejercicios de QR, multiplicación de matrices, speedup y grafos de dependenc
 
 Ejemplo verificable: con tamaños mínimo `A=12` y máximo `B=96`, `H=28`. Tamaños 12 y 39 reciben 1; 40 y 67 reciben 2; 68 y 96 reciben 3. El ejemplo solo valida los umbrales del algoritmo; no define qué procesos pertenecen a `TL`.
 
-**RD-05 — Rangos dinámicos. CONFIRMADO_POR_DOCENTE como comportamiento explicado.** La transcripción explica que la llegada de un proceso mayor puede cambiar el rango y reclasificar como pequeño un proceso que antes estaba en una banda superior (T, 00:11:02–00:12:25 y 00:12:50–00:14:22). No precisa el conjunto de procesos incluido, el instante exacto de recálculo ni el tratamiento del proceso RUN. Esos detalles quedan pendientes.
+**RD-05 — Rangos dinámicos. CONFIRMADO_POR_DOCENTE como comportamiento explicado.** La transcripción explica que la llegada de un proceso mayor puede cambiar el rango y reclasificar como pequeño un proceso que antes estaba en una banda superior (T, 00:11:02–00:12:25 y 00:12:50–00:14:22). No precisa el conjunto de procesos incluido, el instante exacto de recálculo ni el tratamiento del proceso RUN. DP-02 cierra esas decisiones para el destino v2; la laguna de la fuente docente se conserva como contexto.
 
-**RD-06 — Precedencia de las clases 1–3. CONFIRMADO_POR_DOCENTE.** El algoritmo asigna 1 a tamaños pequeños, 2 a medianos y 3 a grandes (N, pág. 24); el procedimiento `ObtenerMaximaPrioridad()` recorre la lista y conserva el valor mayor (N, pág. 25). Por tanto, en el algoritmo presentado P3 tiene precedencia sobre P2 y P1. Lo único pendiente de esta escala es la decisión de adoptarla o adaptarla a la política de equipo 1–10 (DP-01); no está pendiente cuál de P1/P2/P3 es mayor en el algoritmo docente.
+**RD-06 — Precedencia de las clases 1–3. CONFIRMADO_POR_DOCENTE.** El algoritmo asigna 1 a tamaños pequeños, 2 a medianos y 3 a grandes (N, pág. 24); el procedimiento `ObtenerMaximaPrioridad()` recorre la lista y conserva el valor mayor (N, pág. 25). Por tanto, en el algoritmo presentado P3 tiene precedencia sobre P2 y P1. DP-01 ya adopta esta escala para el diseño v2; la política contractual v1.0 permanece intacta para código actual.
 
-**RD-07 — Caso de tamaños iguales. PENDIENTE_CONFIRMACION.** Aplicando literalmente `A=B`, `H=0`; ningún tamaño cumple `Size < A`, así que el pseudocódigo asigna 3 a todos. La fuente no comenta explícitamente este caso ni confirma que ese resultado sea el deseado. El caso se registra como consecuencia mecánica ilustrativa, no como decisión de política.
+**RD-07 — Caso de tamaños iguales.** La fuente no comenta explícitamente este caso. Aplicando literalmente `A=B`, `H=0`; ningún tamaño cumple `Size < A`, así que el pseudocódigo asigna 3 a todos. DP-03 adopta ese resultado mecánico para v2; no se atribuye esa elección a una declaración explícita del docente.
 
 ### Cuota, CPU y time-sharing
 
