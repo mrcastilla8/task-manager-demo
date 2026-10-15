@@ -60,3 +60,43 @@ Cada fila es una respuesta del cuestionario formalizada. La columna v1 documenta
 | DP-11b | Motores lógico/concurrente comparten Scheduler/interfaz; GUI sin planning; un CPU lógico | [DP-11](DECISIONES_APROBADAS.md#dp-11--interfaz-y-motores) | Concurrente existente en rama; lógico ausente al auditar | Aprobada; falta integración | Mock y ambos motores coinciden en mismas trazas |
 
 La presencia de headers solo cubre diseño candidato; no acredita implementación, pruebas de módulos ni integración. Las decisiones de driver continuo, política de errores, cancelación parcial y secuencia de eventos tienen matriz de propuestas en [Propuestas técnicas v2](PROPUESTAS_TECNICAS_V2.md).
+
+## Avance GUI de Poma
+
+Estado de esta rama, 2026-10-15. **DECISION_EQUIPO**, fuentes: DP-08/11 y
+[asignación 05](../05_INTEGRANTE_GUI_INTEGRACION.md). El prototipo opcional no
+adopta la API candidata ni satisface los gates de integración real. Las filas
+históricas anteriores conservan su contexto. Comandos y límites en
+[gui/README.md](../gui/README.md).
+
+| Requisitos | Archivos del avance | Criterio verificable | Alcance |
+|---|---|---|---|
+| RD-01/13, DP-04 | `gui/ProcessTable.*`, `gui/CPUWidget.*` | Mostrar campos publicados y cuota fijada distinta de vigente; RUN explícito | Vistas con fixtures; no clasifica |
+| DP-05/11b | `gui/QueueWidget.*` | Preservar orden del vector READY sin ordenar widgets | `test_gui`, fixture con PID 2 antes de 1/3 |
+| RD-11, DP-08a/b | `gui/TimelineWidget.*`, `gui/Presentation.*` | Gaps inicial/intermedio/final hasta reloj; PID especial solo en geometría local; scroll/zoom | `test_gui_presentation`, `test_gui_models`; escena única con dibujo visible; caso de 50.000 bloques |
+| RD-12, DP-08c | `gui/MemoryWidget.*`, `gui/PreviewFrames.*` | Proporción bytes/capacidad; WAIT ocupa; terminales excluidos | Fixtures y comprobación de suma; inspección visual Qt |
+| DP-08b/d | `gui/EventLogWidget.*`, `gui/MainWindow.*` | Log conserva orden recibido; RUN por snapshot; refresco y zoom no piden paso | `test_gui`; replay por eventos pendiente de ratificación |
+| RD-02, DP-01/06 | `gui/NewProcessDialog.*`, `gui/EngineSession.*` | Alta sin prioridad, límites enteros, E/S válida; delegar alta/cancelación y mostrar rechazos | Tests de formulario/transporte; admisión y cancelación reales pendientes |
+| DP-07/11a | `gui/CMakeLists.txt`, `gui/MainWindow.*`, `main.cpp` | Qt 6 opcional; fixtures identificados; paso delegado solo en PAUSADO | Inicio continuo real deshabilitado hasta driver aprobado |
+| API-01 | CMake raíz y `tests/CMakeLists.txt` | Core/contratos/pruebas existentes intactos; build sin Qt conserva suite v1 | Build separado; `test_gui_presentation` no necesita Qt |
+| DP-11b, gates G4–G6 | `gui/README.md`, `main.cpp` | Conectar fábricas Aldana/Ángel y verificar equivalencia/conmutación/cierre seguro | Pendiente de entregas/API ratificada; no se declara integrado |
+
+### Correcciones POMA-01–POMA-06
+
+Alcance solicitado para `poma`: estabilizar fixtures, adaptador y vistas sin
+integrar motores reales ni cambiar contratos. Decisiones funcionales de DP-08/11
+se conservan; el backoff es política local de consulta UI, no tiempo del modelo.
+
+| ID | Archivos | Criterio verificable y prueba |
+|---|---|---|
+| POMA-01 | `gui/PreviewFrames.*`, `gui/MainWindow.*` | Escenarios con contexto separado; reproducción termina sin cruzar sesiones; reloj monótono dentro de cada escenario (`test_gui_presentation`, `test_gui`) |
+| POMA-02 | `gui/SnapshotComparison.h`, `gui/SnapshotTableModel.*`, vistas | Publicación idéntica sin mutación de modelos/escena; inserción de filas sin reset; historial completo con 50.000 eventos/bloques y 5.000 procesos (`test_gui_models`) |
+| POMA-03 | `gui/MainWindow.*`, `gui/SnapshotComparison.h` | Fallo inicial/posterior conserva última vista válida, bloquea acciones y rearma timer; backoff acotado/reintento manual/restauración de 150 ms (`test_gui_presentation`, `test_gui`) |
+| POMA-04 | `gui/ProcessTable.*`, `gui/MainWindow.*` | Cancelación solo con selección efectiva/PID positivo/activo; terminales y fallo de lectura no envían comando (`test_gui`) |
+| POMA-05 | `gui/ProcessTable.*`, `gui/EventLogWidget.*`, `gui/TimelineWidget.*` | PID seleccionado, scroll y zoom conservados en publicaciones repetidas/cambiadas; seguir el log solo si ya estaba al final (`test_gui_models`) |
+| POMA-06 | `gui/test_presentation.cpp`, `gui/test_gui.cpp`, `gui/test_gui_models.cpp` | Navegación/reintentos sin Qt; modelos/controladores Qt sin ventanas, capturas ni sleeps; ningún refresco modifica reloj/pide paso; suites GUI OFF/ON documentadas en `gui/README.md` |
+
+La API candidata sigue entregando snapshots completos: obtención/comparación O(n)
+y almacenamiento O(n), sin introducir revisión, delta ni secuencia no aprobados.
+El caso grande comprueba trabajo evitado y persistencia; no certifica motores ni
+rendimiento para cualquier volumen posible. PR #6 permanece en Draft.
