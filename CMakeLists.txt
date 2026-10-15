@@ -25,6 +25,7 @@ target_include_directories(simulator_scheduler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR
 find_package(Threads REQUIRED)
 
 add_library(simulator_concurrent
+    concurrent/PlanificadorMotor.cpp
     concurrent/ProcessThread.cpp
     concurrent/ConcurrentEngine.cpp
 )

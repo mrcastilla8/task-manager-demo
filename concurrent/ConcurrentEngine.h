@@ -1,5 +1,6 @@
 #pragma once
 
+#include "concurrent/PlanificadorMotor.h"
 #include "concurrent/ProcessThread.h"
 #include "concurrent/Synchronization.h"
 #include "contracts/EstadoSistema.h"
@@ -7,7 +8,6 @@
 #include "contracts/Proceso.h"
 #include "core/ColaProcesos.h"
 #include "core/Memoria.h"
-#include "scheduler/Scheduler.h"
 
 #include <array>
 #include <atomic>
@@ -34,9 +34,7 @@ enum class EtapaAlta {
 
 class ConcurrentEngine : public IExecutionEngine {
 public:
-    explicit ConcurrentEngine(
-        int capacidadMemoriaBytes = 1024 * 1024,
-        SchedulerConfig schedulerConfig = {});
+    explicit ConcurrentEngine(int capacidadMemoriaBytes = 1024 * 1024);
     ~ConcurrentEngine() override;
 
     ConcurrentEngine(const ConcurrentEngine&) = delete;
@@ -104,7 +102,7 @@ private:
 
     ColaProcesos colaProcesos_;
     Memoria memoria_;
-    Scheduler scheduler_;
+    PlanificadorMotor planificador_;
 
     std::unordered_map<int, std::unique_ptr<ProcessThread>> workers_;
     std::unordered_map<int, InfoIO> trackingIO_;

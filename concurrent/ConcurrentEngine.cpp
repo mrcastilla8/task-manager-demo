@@ -3,10 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
-ConcurrentEngine::ConcurrentEngine(int capacidadMemoriaBytes,
-                                   SchedulerConfig schedulerConfig)
+ConcurrentEngine::ConcurrentEngine(int capacidadMemoriaBytes)
     : memoria_(capacidadMemoriaBytes),
-      scheduler_(schedulerConfig),
       hiloCoordinador_(&ConcurrentEngine::loopCoordinador, this) {}
 
 ConcurrentEngine::~ConcurrentEngine() {
@@ -66,7 +64,7 @@ void ConcurrentEngine::agregarProceso(const Proceso& proceso) {
 
             inyectarFalloAlta(EtapaAlta::CALCULAR_COLA);
             nuevaCola =
-                scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+                planificador_.ordenarCola(colaProcesos_.obtenerTodos());
 
             inyectarFalloAlta(EtapaAlta::PREPARAR_EVENTOS);
             nuevosEventos = {
@@ -341,7 +339,7 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         return;
     }
 
-    const int siguientePid = scheduler_.seleccionarSiguiente(todos);
+    const int siguientePid = planificador_.seleccionarSiguiente(todos);
 
     // Caso 1: Ningun proceso en READY, pero podria haber procesos en WAIT
     if (siguientePid == -1) {
@@ -393,7 +391,7 @@ void ConcurrentEngine::ejecutarPasoInterno(std::unique_lock<std::mutex>& lock) {
         pidEjecutando_ = siguientePid;
         registrarEventoInterno(TipoEvento::PROCESS_RUNNING, siguientePid,
                                "Asignacion de CPU al proceso");
-        scheduler_.alAsignarCPU(*proc);
+        planificador_.alAsignarCPU(*proc);
         // Mientras el worker ejecuta la rafaga el mutex queda libre y la GUI
         // puede leer el snapshot: la cola READY ya no debe incluir al proceso RUN.
         actualizarColaPrioridadInterno();
@@ -519,7 +517,7 @@ bool ConcurrentEngine::todosTerminadosInterno() const {
 }
 
 void ConcurrentEngine::actualizarColaPrioridadInterno() {
-    colaPrioridad_ = scheduler_.ordenarColaPrioridad(colaProcesos_.obtenerTodos());
+    colaPrioridad_ = planificador_.ordenarCola(colaProcesos_.obtenerTodos());
 }
 
 void ConcurrentEngine::avanzarEsperasIOInterno(std::int64_t delta) {
@@ -568,7 +566,7 @@ void ConcurrentEngine::aplicarAgingAListosInterno(std::int64_t delta) {
         prioridadesPrevias.push_back(listo.prioridadActual);
     }
 
-    scheduler_.aplicarAging(listos, delta);
+    planificador_.aplicarAging(listos, delta);
 
     for (std::size_t i = 0; i < listos.size(); ++i) {
         Proceso* original = colaProcesos_.buscar(listos[i].pid);
