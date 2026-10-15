@@ -99,7 +99,7 @@ int main() {
 
     // Caso 7: Escenario 2 de CASOS_REFERENCIA.md: Prevencion estricta de desbordamiento (overflow)
     {
-        const std::int64_t minA = 0;
+        const std::int64_t minA = 1;
         const std::int64_t maxB = 9'000'000'000'000'000'000LL; // 9e18 (cercano a INT64_MAX ~ 9.22e18)
 
         // S = 1e18 -> tercio inferior (< 3e18) -> P1
@@ -113,14 +113,17 @@ int main() {
 
         // Caso limite con rango completo
         const std::int64_t limiteMax = INT64_MAX - 10;
-        EXPECT_EQ(Scheduler::evaluarPrioridad(10, 0, limiteMax), Prioridad::P1);
-        EXPECT_EQ(Scheduler::evaluarPrioridad(limiteMax / 2, 0, limiteMax), Prioridad::P2);
-        EXPECT_EQ(Scheduler::evaluarPrioridad(limiteMax - 1, 0, limiteMax), Prioridad::P3);
+        EXPECT_EQ(Scheduler::evaluarPrioridad(10, 1, limiteMax), Prioridad::P1);
+        EXPECT_EQ(Scheduler::evaluarPrioridad(limiteMax / 2, 1, limiteMax), Prioridad::P2);
+        EXPECT_EQ(Scheduler::evaluarPrioridad(limiteMax - 1, 1, limiteMax), Prioridad::P3);
     }
 
     // Caso 8: Validacion estricta de entradas invalidas sin fallbacks silenciosos (DP-03)
     {
-        // Tamanos negativos
+        // Tamanos no positivos (<= 0) y negativos
+        EXPECT_THROW(Scheduler::evaluarPrioridad(0, 10, 20), std::invalid_argument);
+        EXPECT_THROW(Scheduler::evaluarPrioridad(15, 0, 20), std::invalid_argument);
+        EXPECT_THROW(Scheduler::evaluarPrioridad(15, 10, 0), std::invalid_argument);
         EXPECT_THROW(Scheduler::evaluarPrioridad(-1, 10, 20), std::invalid_argument);
         EXPECT_THROW(Scheduler::evaluarPrioridad(15, -1, 20), std::invalid_argument);
         EXPECT_THROW(Scheduler::evaluarPrioridad(15, 10, -1), std::invalid_argument);
@@ -132,11 +135,16 @@ int main() {
         EXPECT_THROW(Scheduler::evaluarPrioridad(5, 10, 20), std::invalid_argument);
         EXPECT_THROW(Scheduler::evaluarPrioridad(25, 10, 20), std::invalid_argument);
 
-        // Proceso activo en TL con tamano negativo detectado en clasificarPrioridades
-        std::vector<Proceso> invalidos = {
+        // Proceso activo en TL con tamano negativo o cero detectado en clasificarPrioridades
+        std::vector<Proceso> invalidosNegativo = {
             crearProcesoV2(1, "Negativo", -10, Prioridad::P1, 1, Estado::READY),
         };
-        EXPECT_THROW(scheduler.clasificarPrioridades(invalidos), std::invalid_argument);
+        EXPECT_THROW(scheduler.clasificarPrioridades(invalidosNegativo), std::invalid_argument);
+
+        std::vector<Proceso> invalidosCero = {
+            crearProcesoV2(2, "Cero", 0, Prioridad::P1, 1, Estado::READY),
+        };
+        EXPECT_THROW(scheduler.clasificarPrioridades(invalidosCero), std::invalid_argument);
     }
 
     // Caso 9: Admision rechazada no altera TL ni prioridades existentes (DP-02c)

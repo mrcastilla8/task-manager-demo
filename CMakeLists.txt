@@ -11,6 +11,7 @@ option(SIMULATOR_WARNINGS_AS_ERRORS
 
 add_library(simulator_core
     core/ColaProcesos.cpp
+    core/ColaProcesosV2.cpp
     core/Memoria.cpp
 )
 

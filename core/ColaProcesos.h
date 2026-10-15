@@ -1,6 +1,7 @@
 #pragma once
 
 #include "contracts/Proceso.h"
+#include "core/ColaProcesosV2.h"
 
 #include <cstddef>
 #include <list>

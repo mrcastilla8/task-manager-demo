@@ -12,13 +12,112 @@ inline bool perteneceATL(Estado estado) noexcept {
     return estado == Estado::READY || estado == Estado::RUN || estado == Estado::WAIT;
 }
 
+template <typename Container>
+void clasificarInterno(Container& procesos) {
+    std::int64_t minA = INT64_MAX;
+    std::int64_t maxB = INT64_MIN;
+    bool hayTL = false;
+
+    for (const auto& proc : procesos) {
+        if (perteneceATL(proc.estado)) {
+            if (proc.tamanioBytes <= 0) {
+                throw std::invalid_argument(
+                    "Scheduler::clasificarPrioridades: proceso en TL con tamanio no positivo (<= 0)");
+            }
+            minA = std::min(minA, proc.tamanioBytes);
+            maxB = std::max(maxB, proc.tamanioBytes);
+            hayTL = true;
+        }
+    }
+
+    if (!hayTL) {
+        return;
+    }
+
+    for (auto& proc : procesos) {
+        if (perteneceATL(proc.estado)) {
+            proc.prioridad = Scheduler::evaluarPrioridad(proc.tamanioBytes, minA, maxB);
+        }
+    }
+}
+
+template <typename Container>
+int seleccionarSiguienteInterno(const Container& procesos) noexcept {
+    const Proceso* mejor = nullptr;
+
+    for (const auto& proceso : procesos) {
+        // Excluir procesos no READY y procesos con ticket sin asignar (ticketReady == 0)
+        if (proceso.estado != Estado::READY ||
+            proceso.ticketReady == Scheduler::TICKET_SIN_ASIGNAR) {
+            continue;
+        }
+
+        if (mejor == nullptr) {
+            mejor = &proceso;
+            continue;
+        }
+
+        const auto prioActual = static_cast<std::uint8_t>(proceso.prioridad);
+        const auto prioMejor = static_cast<std::uint8_t>(mejor->prioridad);
+
+        if (prioActual > prioMejor) {
+            mejor = &proceso;
+        } else if (prioActual == prioMejor) {
+            if (proceso.ticketReady < mejor->ticketReady) {
+                mejor = &proceso;
+            } else if (proceso.ticketReady == mejor->ticketReady &&
+                       proceso.pid < mejor->pid) {
+                mejor = &proceso;
+            }
+        }
+    }
+
+    return mejor != nullptr ? mejor->pid : -1;
+}
+
+template <typename Container>
+std::vector<int> ordenarColaPrioridadInterno(const Container& procesos) {
+    std::vector<const Proceso*> listos;
+
+    for (const auto& proceso : procesos) {
+        // Solo incluir procesos en estado READY con ticket asignado
+        if (proceso.estado == Estado::READY &&
+            proceso.ticketReady != Scheduler::TICKET_SIN_ASIGNAR) {
+            listos.push_back(&proceso);
+        }
+    }
+
+    std::sort(listos.begin(), listos.end(),
+              [](const Proceso* a, const Proceso* b) noexcept {
+                  const auto prioA = static_cast<std::uint8_t>(a->prioridad);
+                  const auto prioB = static_cast<std::uint8_t>(b->prioridad);
+
+                  if (prioA != prioB) {
+                      return prioA > prioB;
+                  }
+                  if (a->ticketReady != b->ticketReady) {
+                      return a->ticketReady < b->ticketReady;
+                  }
+                  return a->pid < b->pid;
+              });
+
+    std::vector<int> resultado;
+    resultado.reserve(listos.size());
+    for (const auto* proceso : listos) {
+        resultado.push_back(proceso->pid);
+    }
+
+    return resultado;
+}
+
 }  // namespace
 
 Prioridad Scheduler::evaluarPrioridad(std::int64_t tamanioBytes,
                                      std::int64_t minA,
                                      std::int64_t maxB) {
-    if (tamanioBytes < 0 || minA < 0 || maxB < 0) {
-        throw std::invalid_argument("Scheduler::evaluarPrioridad: los tamanos no pueden ser negativos");
+    if (tamanioBytes <= 0 || minA <= 0 || maxB <= 0) {
+        throw std::invalid_argument(
+            "Scheduler::evaluarPrioridad: los tamanos deben ser estrictamente positivos (> 0)");
     }
     if (minA > maxB) {
         throw std::invalid_argument("Scheduler::evaluarPrioridad: minA no puede ser mayor que maxB");
@@ -73,95 +172,29 @@ Prioridad Scheduler::evaluarPrioridad(std::int64_t tamanioBytes,
 }
 
 void Scheduler::clasificarPrioridades(std::vector<Proceso>& procesos) const {
-    std::int64_t minA = INT64_MAX;
-    std::int64_t maxB = INT64_MIN;
-    bool hayTL = false;
+    clasificarInterno(procesos);
+}
 
-    for (const auto& proc : procesos) {
-        if (perteneceATL(proc.estado)) {
-            if (proc.tamanioBytes < 0) {
-                throw std::invalid_argument("Scheduler::clasificarPrioridades: proceso en TL con tamanio negativo");
-            }
-            minA = std::min(minA, proc.tamanioBytes);
-            maxB = std::max(maxB, proc.tamanioBytes);
-            hayTL = true;
-        }
-    }
-
-    if (!hayTL) {
-        return;
-    }
-
-    for (auto& proc : procesos) {
-        if (perteneceATL(proc.estado)) {
-            proc.prioridad = evaluarPrioridad(proc.tamanioBytes, minA, maxB);
-        }
-    }
+void Scheduler::clasificarPrioridades(std::list<Proceso>& procesos) const {
+    clasificarInterno(procesos);
 }
 
 int Scheduler::seleccionarSiguiente(const std::vector<Proceso>& procesos) const noexcept {
-    const Proceso* mejor = nullptr;
+    return seleccionarSiguienteInterno(procesos);
+}
 
-    for (const auto& proceso : procesos) {
-        if (proceso.estado != Estado::READY) {
-            continue;
-        }
-
-        if (mejor == nullptr) {
-            mejor = &proceso;
-            continue;
-        }
-
-        const auto prioActual = static_cast<std::uint8_t>(proceso.prioridad);
-        const auto prioMejor = static_cast<std::uint8_t>(mejor->prioridad);
-
-        if (prioActual > prioMejor) {
-            mejor = &proceso;
-        } else if (prioActual == prioMejor) {
-            if (proceso.ticketReady < mejor->ticketReady) {
-                mejor = &proceso;
-            } else if (proceso.ticketReady == mejor->ticketReady &&
-                       proceso.pid < mejor->pid) {
-                mejor = &proceso;
-            }
-        }
-    }
-
-    return mejor != nullptr ? mejor->pid : -1;
+int Scheduler::seleccionarSiguiente(const std::list<Proceso>& procesos) const noexcept {
+    return seleccionarSiguienteInterno(procesos);
 }
 
 std::vector<int> Scheduler::ordenarColaPrioridad(
     const std::vector<Proceso>& procesos) const {
-    std::vector<const Proceso*> listos;
-    listos.reserve(procesos.size());
+    return ordenarColaPrioridadInterno(procesos);
+}
 
-    for (const auto& proceso : procesos) {
-        if (proceso.estado == Estado::READY) {
-            listos.push_back(&proceso);
-        }
-    }
-
-    std::sort(listos.begin(), listos.end(),
-              [](const Proceso* a, const Proceso* b) noexcept {
-                  const auto prioA = static_cast<std::uint8_t>(a->prioridad);
-                  const auto prioB = static_cast<std::uint8_t>(b->prioridad);
-
-                  if (prioA != prioB) {
-                      return prioA > prioB;
-                  }
-                  if (a->ticketReady != b->ticketReady) {
-                      return a->ticketReady < b->ticketReady;
-                  }
-                  return a->pid < b->pid;
-              });
-
-    std::vector<int> resultado;
-    resultado.reserve(listos.size());
-    for (const auto* proceso : listos) {
-        resultado.push_back(proceso->pid);
-    }
-
-    return resultado;
+std::vector<int> Scheduler::ordenarColaPrioridad(
+    const std::list<Proceso>& procesos) const {
+    return ordenarColaPrioridadInterno(procesos);
 }
 
 }  // namespace ConcurrentSimulator::v2
