@@ -25,4 +25,8 @@ add_simulator_test(test_scheduler_prioridad)
 add_simulator_test(test_scheduler_empate)
 add_simulator_test(test_scheduler_aging)
 add_simulator_test(test_scheduler_config)
+add_simulator_test(test_scheduler_v2_clasificacion)
+add_simulator_test(test_scheduler_v2_prioridad)
+add_simulator_test(test_scheduler_v2_empate)
+add_simulator_test(test_scheduler_v2_no_aging)
 

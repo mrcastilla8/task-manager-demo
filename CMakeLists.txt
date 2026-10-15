@@ -18,6 +18,7 @@ target_include_directories(simulator_core PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 
 add_library(simulator_scheduler
     scheduler/Scheduler.cpp
+    scheduler/SchedulerV2.cpp
 )
 
 target_include_directories(simulator_scheduler PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
