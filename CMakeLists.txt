@@ -33,3 +33,9 @@ include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+
+# Prototipo aislado: no migra simulator_core ni adopta contratos v2.
+option(SIMULATOR_BUILD_GUI_PREVIEW "Construir prototipo Qt 6 con snapshots v2 candidatos" OFF)
+if(SIMULATOR_BUILD_GUI_PREVIEW)
+    add_subdirectory(gui)
+endif()

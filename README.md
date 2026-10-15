@@ -38,4 +38,7 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-Los comandos describen el flujo actual; la API v2 no forma parte del build principal en este cambio.
+El build base no requiere Qt ni migra el core v1. En `poma` hay un
+[prototipo GUI Qt 6](gui/README.md) opcional con snapshots preparados y adaptador
+experimental a la API v2 candidata. Activar con `-DSIMULATOR_BUILD_GUI_PREVIEW=ON`.
+No hay motores reales integrados ni se declara adoptado el contrato candidato.

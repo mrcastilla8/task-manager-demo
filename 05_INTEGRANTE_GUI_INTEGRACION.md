@@ -1,6 +1,6 @@
 # Integrante 5 — GUI, visualización e integración
 
-**Responsable:** Poma · **Rama:** `poma` · **Estado:** implementación futura, no presente en ramas auditadas. La plataforma aprobada para el destino v2 es Qt 6 + C++17 + CMake.
+**Responsable:** Poma · **Rama:** `poma` · **Estado:** prototipo de presentación con fixtures disponible en esta rama; motores reales e integración final pendientes. La plataforma aprobada para el destino v2 es Qt 6 + C++17 + CMake. El [README de GUI](gui/README.md) describe ejecución, alcance y puntos de conexión. La auditoría histórica previa no incluía GUI.
 
 ## Objetivo y límites
 

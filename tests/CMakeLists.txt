@@ -21,3 +21,9 @@ add_simulator_test(test_proceso)
 add_simulator_test(test_cola)
 add_simulator_test(test_memoria)
 add_simulator_test(test_integracion)
+
+# Presentación sin Qt: comprueba gaps, entradas y fixtures sin migrar core.
+add_executable(test_gui_presentation ../gui/test_presentation.cpp
+    ../gui/Presentation.cpp ../gui/PreviewFrames.cpp)
+target_include_directories(test_gui_presentation PRIVATE ${PROJECT_SOURCE_DIR})
+add_test(NAME test_gui_presentation COMMAND test_gui_presentation)
