@@ -19,7 +19,7 @@ Los ejercicios de QR, multiplicación de matrices, speedup y grafos de dependenc
 
 **RD-02 — Procesos dinámicos. CONFIRMADO_POR_DOCENTE.** Nuevos procesos ingresan para almacenarse en memoria y ejecutarse, y otros terminan (N, pág. 25; T, 00:08:25–00:08:52). El detalle de admisión cuando la memoria no alcanza no queda fijado por estas fuentes.
 
-**RD-03 — Estructura de cola. CONFIRMADO_POR_DOCENTE como descripción académica; obligatoriedad técnica PENDIENTE_CONFIRMACION.** Las notas describen una lista enlazada simple con referencias al inicio y al final (N, pág. 25). La misma página contiene pseudocódigo incompleto o internamente inconsistente para insertar y buscar prioridades. Se documenta la sugerencia, pero no se la convierte en una orden de reemplazo de la estructura actual.
+**RD-03 — Estructura de cola. CONFIRMADO_POR_DOCENTE como intención de implementación; obligatoriedad para la entrega PENDIENTE_CONFIRMACION.** La fuente dice: “Se va implementar un modelo dinámico basado en una estructura de lista enlazada simple que posee 2 punteros, al inicio y al final” (N, pág. 25). Se conserva literalmente esa intención: lista simple dinámica con referencias de inicio y final. La fuente disponible no confirma si esa estructura concreta es condición de aceptación de la entrega. La misma página contiene pseudocódigo incompleto o internamente inconsistente para insertar y buscar prioridades; ese pseudocódigo no reemplaza los contratos actuales ni define la API.
 
 ### Prioridad basada en tamaños
 
@@ -39,7 +39,7 @@ Ejemplo verificable: con tamaños mínimo `A=12` y máximo `B=96`, `H=28`. Tama�
 
 **RD-09 — Cuota de ejemplo `prioridad × 10 ms`. PROPUESTA_DOCENTE.** La transcripción ilustra multiplicar las clases 1, 2 y 3 por diez milisegundos, lo que produce 10, 20 y 30 ms en ese ejemplo (T, 00:11:50–00:12:07). También menciona duraciones ilustrativas distintas durante la explicación del diagrama (T, 00:06:29–00:07:37). No se afirma que exista una fórmula obligatoria ni una unidad distinta de milisegundos.
 
-**RD-10 — CPU lógico único y turnos. CONFIRMADO_POR_DOCENTE.** La explicación toma un procesador y varios procesos; el gestor divide el uso de CPU en porciones, retira el proceso al acabar su tiempo y atiende otro. El profesor aclara que esto es concurrencia percibida, no ejecución paralela simultánea en el CPU lógico descrito (N, pág. 28; T, 00:05:19–00:07:45). No exige hilos reales en el programa.
+**RD-10 — CPU lógico único y turnos. CONFIRMADO_POR_DOCENTE.** La explicación toma un procesador y varios procesos; se asignan porciones de CPU y, al pasar el tiempo de un proceso, entra otro. Esto describe turnos en un CPU lógico, no ejecución paralela simultánea (N, pág. 28; T, 00:05:19–00:07:50). La fuente no indica a qué estado pasa el proceso anterior; no atribuirle por esta explicación una transición RUN→READY. Tampoco exige hilos reales en el programa.
 
 **RD-11 — Timeline temporal. CONFIRMADO_POR_DOCENTE para mostrar turnos y duración relativa.** La página 28 contrasta el procesamiento serial con el time-sharing mediante segmentos coloreados sobre eje de tiempo; segmentos de distinta anchura representan turnos de distinta duración (N, pág. 28; T, 00:07:14–00:07:50). El formato concreto de ejes, escala, persistencia, CPU ocioso y desplazamiento no está definido.
 
@@ -47,9 +47,10 @@ Ejemplo verificable: con tamaños mínimo `A=12` y máximo `B=96`, `H=28`. Tama�
 
 ### Estados y flujo
 
-**RD-13 — Estados nombrados. CONFIRMADO_POR_DOCENTE.** Las notas enumeran `READY`, `WAIT`, `RUN`, `CANCEL` y `FINISH` (N, pág. 23). El diagrama de estados de la página 27 es una referencia visual y no define por sí solo todas las transiciones del time-sharing.
+**RD-13 — Estados nombrados y flechas dibujadas. CONFIRMADO_POR_DOCENTE.** Las notas enumeran `READY`, `WAIT`, `RUN`, `CANCEL` y `FINISH` (N, pág. 23). El diagrama de la página 27 representa READY→RUN, RUN→WAIT, RUN→FINISH, RUN→CANCEL y WAIT→READY (N, pág. 27). La presencia de cada flecha confirma que la transición está representada en el diseño docente; no especifica por sí sola su disparador, duración, orden temporal ni implementación completa.
 
-**RD-14 — Bloqueo y retorno. CONFIRMADO_POR_DOCENTE a nivel conceptual; regla temporal exacta PENDIENTE_CONFIRMACION.** El estado `WAIT` aparece en las notas y el diagrama de estados (N, págs. 23 y 27), pero las fuentes suministradas no establecen el origen del bloqueo, duración ni todas las flechas necesarias. No se debe inferir que una flecha ausente prohíba una transición.
+**RD-14 — Bloqueo y retorno. CONFIRMADO_POR_DOCENTE en el diagrama; semántica temporal PENDIENTE_CONFIRMACION.** La flecha WAIT→READY aparece en el diagrama (N, pág. 27). La fuente no fija la causa del bloqueo, condición de despertar ni duración de WAIT. Una flecha ausente no constituye una prohibición.
+
 
 ## Fuera de alcance
 

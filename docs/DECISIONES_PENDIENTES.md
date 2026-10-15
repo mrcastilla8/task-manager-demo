@@ -54,11 +54,11 @@ Las alternativas y propuestas de esta lista no están aprobadas. Resolverlas req
 
 ## DP-06 — Matriz de transiciones y cancelación
 
-**Alternativas:** adoptar las transiciones del diseño de equipo (READY→RUN, RUN→READY/WAIT/FINISH/CANCEL, WAIT→READY/CANCEL); limitar o permitir cancelación por estado; definir terminalidad de FINISH/CANCEL.
+**Alternativas:** acordar los estados de destino y eventos del proceso que deja CPU al acabar su turno; establecer si el diseño del equipo añade transiciones no dibujadas; especificar condiciones y eventos de las transiciones del diagrama; definir cancelación por estado y terminalidad de FINISH/CANCEL. Las flechas READY→RUN, RUN→WAIT/FINISH/CANCEL y WAIT→READY sí aparecen en el diagrama docente.
 
-**Evidencia:** estados en notas, pág. 23; diagrama de pág. 27; time-sharing exige turnos (pág. 28), pero el diagrama no muestra todas las flechas necesarias. El motor concurrente actual permite cancelar READY, RUN y WAIT e ignora PID inexistentes, FINISH o ya CANCEL; es comportamiento implementado, no mandato docente.
+**Evidencia:** estados en notas, pág. 23; flechas indicadas en el diagrama, pág. 27; la pág. 28 dice que, una vez pasa el tiempo asignado a un proceso, entra otro, pero no nombra el estado del proceso anterior. El diagrama no define disparadores, duración ni orden temporal completo, y las flechas que no dibuja quedan sin especificar, no prohibidas. El motor concurrente actual reingresa a READY al agotar quantum y permite cancelar READY, RUN y WAIT; ignora PID inexistentes, FINISH o ya CANCEL. Es comportamiento implementado, no mandato docente.
 
-**Impacto:** validación de operaciones, emisión de eventos, memoria, hilos activos, representación y tests de motores.
+**Impacto:** validación de operaciones, emisión de eventos, memoria, hilos activos, representación y pruebas de motores; distinguir las flechas dibujadas de la transición RUN→READY de implementación, y RUN→CANCEL dibujada de los detalles sobre cuándo y cómo cancelar.
 
 **Propuesta para deliberar:** aprobar una matriz completa de estados-transiciones y el efecto de cancelar durante RUN; conservar diferenciada la semántica implementada de la evidencia académica.
 
@@ -74,23 +74,23 @@ Las alternativas y propuestas de esta lista no están aprobadas. Resolverlas req
 
 ## DP-08 — Detalles de timeline y mapa gráfico de memoria
 
-**Alternativas:** segmento sin actividad o banda de CPU inactivo; eje con escala fija o adaptativa; historial ilimitado, ventana desplazable o límite configurable; memoria conceptual con bloques proporcionales en orden de admisión u otro orden.
+**Alternativas:** segmento sin actividad o banda de CPU inactivo; eje con escala fija o adaptativa; historial ilimitado, ventana desplazable o límite configurable; memoria conceptual con bloques proporcionales en orden de admisión u otro orden; y definir la cadencia/fuente de actualización que permita percibir el estado RUN aunque sea transitorio.
 
 **Evidencia:** notas, págs. 28–29, time-sharing temporal y diagrama de procesos/cola/memoria/CPU; transcripción 00:08:25–00:09:28. Contrato 1.0 tiene bloques `[inicio, fin)` solo para PID de proceso y la implementación de memoria no conserva dirección ni orden de colocación.
 
-**Impacto:** tipo de timeline, consistencia de duraciones, rendimiento de GUI, interpretación de CPU ocioso y diseño del widget de memoria. Una región física/dirección real sería una ampliación no respaldada.
+**Impacto:** tipo y retención del timeline, consistencia de duraciones, rendimiento de GUI, visibilidad de RUN transitorio, interpretación de CPU ocioso y diseño del widget de memoria. La actualización visual debe presentar el estado observado sin avanzar ni alterar el reloj simulado; su cadencia no define el paso del motor (DP-07). Una región física/dirección real sería una ampliación no respaldada.
 
-**Propuesta para deliberar:** acordar escala, idle, retención/desplazamiento y orden conceptual de bloques. Mantener el requerimiento visual; no prometer exportación PNG/HTML/PDF.
+**Propuesta para deliberar:** acordar escala, idle, retención/desplazamiento, orden conceptual de bloques y cómo hacer visible RUN transitorio sin modificar tiempo simulado. Mantener el requerimiento visual; no prometer exportación PNG/HTML/PDF.
 
 ## DP-09 — Lista enlazada simple frente a `std::list`
 
-**Alternativas:** conservar la implementación actual y confirmar que la recomendación académica es conceptual; adoptar lista enlazada simple solo si la estructura específica es obligatoria; o coordinar otra representación tras evaluar requisito y contrato.
+**Alternativas:** cumplir literalmente la intención docente con una lista enlazada simple dinámica y punteros de inicio/final; o confirmar con el docente/equipo que `std::list` satisface la entrega pese a que no es una lista simple. La fuente expresa que se implementará la primera estructura; queda pendiente si esa forma concreta es criterio obligatorio de aceptación.
 
-**Evidencia:** notas, pág. 25, dicen lista enlazada simple con referencias a inicio/fin; `core/ColaProcesos.h` en master usa `std::list<Proceso>`, normalmente doblemente enlazada, preserva inserción pero no agenda.
+**Evidencia:** notas, pág. 25: “Se va implementar un modelo dinámico basado en una estructura de lista enlazada simple que posee 2 punteros, al inicio y al final.” `core/ColaProcesos.h` en master usa `std::list<Proceso>`, normalmente doblemente enlazada; preserva inserción, pero no agenda.
 
 **Impacto:** implementación, complejidad, pruebas y posible expectativa académica. El pseudocódigo de inserción/búsqueda de prioridad en esa página está incompleto/inconsistente.
 
-**Propuesta para deliberar:** confirmar obligatoriedad con docente antes de reemplazar estructura. No inferir incumplimiento del proyecto completo solo por diferencia de representación.
+**Propuesta para deliberar:** conservar la intención literal en el plan y confirmar si la estructura específica será evaluada como requisito de entrega antes de cambiar la implementación actual. No rebajar la intención a una mera recomendación ni declarar incumplimiento hasta resolver la obligatoriedad.
 
 ## DP-10 — Aging y prioridad dinámica por tamaño
 

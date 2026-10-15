@@ -16,7 +16,7 @@ Toda regla relevante debe identificarse como `CONFIRMADO_POR_DOCENTE`, `PROPUEST
 
 Las notas enumeran ID, nombre, tamaño en bytes, estado, cuota en milisegundos y prioridad. El contrato actual añade prioridad base/actual, tiempos total/restante/espera, quantum consumido, orden de llegada y operación opcional de E/S. No agregues campos ni cambies firmas del contrato congelado v1.0 sin una migración aprobada.
 
-Estados: `READY`, `RUN`, `WAIT`, `FINISH` y `CANCEL`. La fuente docente nombra los estados y muestra un diagrama (págs. 23 y 27), pero no detalla todas las transiciones de time-sharing. La matriz completa con origen de cada transición está en la [especificación funcional](docs/ESPECIFICACION_FUNCIONAL.md); una flecha ausente no se considera prohibición.
+Estados: `READY`, `RUN`, `WAIT`, `FINISH` y `CANCEL`. El diagrama docente de la pág. 27 dibuja READY→RUN, RUN→WAIT/FINISH/CANCEL y WAIT→READY; cada flecha confirma que esa transición está representada, sin fijar disparador ni duración. La pág. 28 explica que, tras pasar el tiempo asignado a un proceso, entra otro; no especifica el estado del proceso anterior ni dibuja RUN→READY. La matriz con procedencia de cada transición está en la [especificación funcional](docs/ESPECIFICACION_FUNCIONAL.md); una flecha ausente no se considera prohibición.
 
 ### Política y unidades de tiempo
 
@@ -32,7 +32,7 @@ Las notas listan una cuota por proceso en milisegundos (pág. 23). La fórmula `
 
 El contrato expresa el tiempo simulado en milisegundos. Los conceptos de tiempo simulado y demora visual son independientes. Como sugerencia de equipo, los documentos originales mencionan quantum de 500 ms y un paso visual de 800 ms reales; la unidad exacta de `siguientePaso()` sigue pendiente (DP-07). Velocidades visuales sugeridas por el equipo: `0.25x`, `0.5x`, `1x`, `2x` y `5x`; no son requisitos del profesor.
 
-Registrar eventos significativos como proceso creado/admitido, READY→RUN, fin de quantum, RUN→READY, RUN→WAIT, WAIT→READY, RUN→FINISH, cambio por aging y cancelación, cuando correspondan a la configuración aprobada. Un bloque de timeline describe tiempo de CPU; el log conserva explicación textual. Comparar ambos motores con las mismas entradas y criterio de paso aprobado.
+Registrar eventos significativos como proceso creado/admitido, READY→RUN, fin de quantum, RUN→READY, RUN→WAIT, WAIT→READY, RUN→FINISH, cambio por aging y cancelación, cuando correspondan a la configuración aprobada. El reingreso RUN→READY después de quantum pertenece al comportamiento de motor/equipo y sus condiciones comunes siguen en DP-05/06/07; no se atribuye como flecha a la página 27 ni como estado del proceso previo en la página 28. Un bloque de timeline describe tiempo de CPU; el log conserva explicación textual. **DECISION_EQUIPO:** la GUI debe hacer visible el estado RUN aunque sea transitorio; el refresco presenta el snapshot sin avanzar el reloj simulado (cadencia pendiente DP-08). Comparar ambos motores con las mismas entradas y criterio de paso aprobado.
 
 ## Requisitos visuales
 

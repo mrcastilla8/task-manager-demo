@@ -16,19 +16,19 @@ Las notas enumeran identificador, nombre, tamaño de memoria, estado, cuota en m
 
 ### Estados y transiciones
 
-La matriz cubre los cinco estados definidos. `D` indica comportamiento respaldado conceptualmente por el docente; `E`, decisión/documentación del equipo; `I`, comportamiento observado en la implementación concurrente; `?`, transición no especificada. `?` no significa prohibida. Una llamada cancelar sobre FINISH no produce transición en la implementación actual. Los estados repetidos no son transición.
+La matriz cubre los cinco estados definidos. `D` indica una flecha dibujada en el diagrama docente de la pág. 27 o una explicación docente separada de time-sharing en la pág. 28, según se cita en cada celda; no acredita una semántica temporal completa. `E` indica decisión/documentación del equipo; `I`, comportamiento observado en la implementación concurrente; `?`, transición no especificada. `?` no significa prohibida. Una llamada cancelar sobre FINISH no produce transición en la implementación actual. Los estados repetidos no son transición.
 
 | Desde ↓ / Hacia → | READY | RUN | WAIT | FINISH | CANCEL |
 |---|---|---|---|---|---|
-| READY | — | D: selección/atención | ?: sin regla | ?: sin regla | I: cancelable |
-| RUN | D: al agotarse el turno | — | E: E/S opcional | E: CPU completada | I: cancelable; efecto parcial pendiente |
-| WAIT | E: retorna al terminar espera | ?: sin regla | — | ?: sin regla | I: cancelable |
+| READY | — | D: flecha en diagrama p. 27; condición temporal no indicada | ?: sin regla | ?: sin regla | ?: sin flecha en diagrama |
+| RUN | I: el motor concurrente actual reingresa a READY al agotar quantum; política común y orden pendientes DP-05/06/07 | — | D: flecha en p. 27; causa/duración no indicadas | D: flecha en p. 27; condición temporal no indicada | D: flecha en p. 27; condición temporal no indicada |
+| WAIT | D: flecha en p. 27; condición/duración de retorno no indicadas | ?: sin flecha en diagrama | — | ?: sin flecha en diagrama | ?: sin flecha en diagrama |
 | FINISH | ?: sin regla | ?: sin regla | ?: sin regla | — | I: cancelar no cambia estado |
 | CANCEL | ?: sin regla | ?: sin regla | ?: sin regla | ?: sin regla | — |
 
-Las notas enumeran READY, RUN, WAIT, CANCEL y FINISH (pág. 23) y el diagrama de estados aparece en pág. 27. El tiempo compartido exige retorno de RUN a READY cuando se cede el CPU (pág. 28). Las flechas de E/S, fin y cancelación de la matriz provienen de decisiones/documentación de equipo o comportamiento observado, no de una atribución docente más fuerte que la fuente.
+Las notas enumeran READY, RUN, WAIT, CANCEL y FINISH (pág. 23). El diagrama de la página 27 dibuja READY→RUN, RUN→WAIT, RUN→FINISH, RUN→CANCEL y WAIT→READY. Cada flecha confirma que esa transición está representada en el diseño del docente; por sí sola no establece disparador, duración, orden temporal, política de admisión ni comportamiento de cada motor. La explicación de la página 28 dice que al pasar el tiempo asignado a un proceso entra otro, pero no especifica el estado del proceso anterior; no se atribuye RUN→READY a esa fuente. La implementación concurrente actual reingresa a READY al agotar quantum; su política común sigue pendiente. Las flechas ausentes quedan sin especificar, no prohibidas.
 
-El diagrama docente está en las notas, pág. 27. No se atribuye a esa fuente una prohibición por flechas ausentes. El conjunto exacto de transiciones permitidas y sus eventos asociados debe aprobarse en [DP-06](DECISIONES_PENDIENTES.md).
+La [matriz de transiciones](#estados-y-transiciones) conserva por separado las flechas dibujadas, la explicación temporal de la página 28, el diseño del equipo y el comportamiento implementado. El alcance más amplio de transiciones, condiciones, eventos y cancelación debe acordarse en [DP-06](DECISIONES_PENDIENTES.md).
 
 ## Prioridad y cola
 

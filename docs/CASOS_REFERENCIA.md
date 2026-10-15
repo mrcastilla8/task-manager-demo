@@ -89,6 +89,6 @@ Con quantum 500 ms y A con 1,300 ms restantes, comparar tres interpretaciones: u
 
 ## P13 — Transiciones y cancelación
 
-**Tipo:** estados confirmados; matriz ampliada pendiente DP-06.
+**Tipo:** flechas del diagrama confirmadas; semántica operativa ampliada pendiente DP-06.
 
-READY→RUN y el turno RUN→READY describen planificación/time-sharing. RUN→FINISH representa completar CPU; RUN→WAIT y WAIT→READY están en el diseño de equipo con E/S. Cancelación desde READY/RUN/WAIT está soportada en la implementación concurrente actual; desde FINISH se ignora. Aprobar explícitamente si CANCEL es terminal, qué intervalo se registra al interrumpir RUN y qué eventos se emiten. El diagrama docente (pág. 27) no basta para inferir transiciones prohibidas.
+El diagrama docente de la pág. 27 muestra READY→RUN, RUN→WAIT, RUN→FINISH, RUN→CANCEL y WAIT→READY. No indica los disparadores, duraciones ni el orden temporal completo de esas transiciones. La pág. 28 dice que al pasar el tiempo asignado entra otro proceso, pero no indica el estado del proceso anterior; RUN→READY no se atribuye a esa explicación. La implementación concurrente sí reingresa a READY tras agotar quantum y permite cancelar desde READY/RUN/WAIT, e ignora FINISH; eso no reemplaza la evidencia gráfica ni define por sí solo la política común del equipo. DP-06 debe precisar estados destino, terminalidad de CANCEL, efecto/intervalo al cancelar RUN, eventos y transiciones adicionales. Las flechas ausentes permanecen sin especificar, no prohibidas.

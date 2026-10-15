@@ -71,7 +71,7 @@ Los ejemplos usan bytes para coincidir con los contratos; no usar los MB del bor
 - Memoria: `core/Memoria.h`, `core/Memoria.cpp`.
 - Pruebas: `tests/test_proceso.cpp`, `tests/test_cola.cpp`, `tests/test_memoria.cpp`.
 
-Este módulo puede comenzar primero. Scheduler, motores y GUI dependen de los contratos de proceso/estado/snapshot; mantenerlos estables. La página 25 recomienda lista enlazada simple con inicio y final, mientras el código usa `std::list` doblemente enlazada. La obligatoriedad académica de la implementación concreta sigue pendiente en DP-09; no sustituir unilateralmente el contenedor. El pseudocódigo de cola/prioridad de las págs. 25–26 es incompleto o inconsistente y no constituye una API.
+Este módulo puede comenzar primero. Scheduler, motores y GUI dependen de los contratos de proceso/estado/snapshot; mantenerlos estables. La página 25 dice que se implementará un modelo dinámico de lista enlazada simple con dos punteros, inicio y final. Se conserva esa intención explícita; queda pendiente confirmar si esa estructura concreta es obligatoria para la entrega (DP-09). El código actual usa `std::list` doblemente enlazada; no sustituir unilateralmente el contenedor. El pseudocódigo de cola/prioridad de las págs. 25–26 es incompleto o inconsistente y no constituye una API.
 
 ## Criterios de aceptación
 

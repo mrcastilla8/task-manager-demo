@@ -41,7 +41,7 @@ Representar solo procesos READY, con prioridad y orden que devuelve `EstadoSiste
 
 ### CPU y temporizador
 
-Mostrar PID/nombre del proceso atendido, estado RUN, prioridad vigente, tiempo restante y tiempo de intervalo disponible desde el snapshot. El equipo propone visualizar quantum actual/progreso; el contrato contiene quantum global y `Proceso.quantumConsumido`. No mostrar varios workers como CPUs simulados: el modelo es un CPU lógico. El temporizador usa tiempo simulado y la velocidad visual solo controla la presentación.
+Mostrar PID/nombre del proceso atendido, estado RUN, prioridad vigente, tiempo restante y tiempo de intervalo disponible desde el snapshot. **Necesidad de GUI del equipo:** dar feedback visual al estado RUN aunque sea transitorio. Acordar la cadencia y el mecanismo de actualización de snapshots para que ese estado llegue a la vista. El refresco solo representa el reloj/estado publicado: no incrementa ni altera el tiempo simulado. Su cadencia de presentación queda en DP-08, separada de la semántica de avance del motor en DP-07. El equipo propone visualizar quantum actual/progreso; el contrato contiene quantum global y `Proceso.quantumConsumido`. No mostrar varios workers como CPUs simulados: el modelo es un CPU lógico. La velocidad visual solo controla la presentación.
 
 ### Memoria
 
@@ -49,7 +49,7 @@ Mostrar capacidad total, utilizada, disponible y procesos cargados; además, un 
 
 ### Timeline
 
-Debe ser una vista gráfica de segmentos de CPU sobre eje temporal; cada segmento se corresponde con `[inicio, fin)` y su anchura es proporcional a la duración. Conservar historial visible mientras dure la sesión. No confundir con tabla, cola, log o exportación. No se pide PNG/HTML/PDF. Escala exacta, idle, límite/retención, desplazamiento y zoom son decisiones pendientes DP-08.
+Debe ser una vista gráfica de segmentos de CPU sobre eje temporal; cada segmento se corresponde con `[inicio, fin)` y su anchura es proporcional a la duración. La retención/ventana del historial, escala, CPU idle, desplazamiento y zoom quedan pendientes DP-08. No se fija cuánto tiempo permanecen los segmentos visibles ni se garantiza conservar toda la sesión. No confundir con tabla, cola, log o exportación. No se pide PNG/HTML/PDF.
 
 ### Registro de eventos
 
@@ -67,6 +67,7 @@ El mock implementa todos los métodos de `IExecutionEngine` vigente y devuelve s
 
 1. Dos procesos READY en la cola.
 2. Un proceso RUN con intervalo parcial reflejado en CPU/timeline.
+   - La vista muestra el estado RUN transitorio a partir del snapshot; el refresco visual no adelanta el reloj simulado.
 3. Proceso que agota quantum y retorna a READY con orden actualizado después de que el motor aplique la política aprobada.
 4. Proceso WAIT con otro READY y retorno posterior.
 5. FINISH y CANCEL, incluida memoria liberada como indique snapshot.
@@ -83,6 +84,7 @@ La asignación fuente no nombró archivos de tests GUI. Mantener los siguientes 
 - `agregarProceso` valida campos, refleja admisión y muestra error de memoria insuficiente sin inventar estado.
 - `cancelarProceso` actualiza fila, memoria/log y cola del snapshot; cubre PID inexistente según contrato.
 - Pausa, paso y reinicio activan los controles y actualizan vistas sin congelar ventana; semántica de paso condicionada a DP-07.
+- El estado RUN transitorio puede observarse mientras ocurre; el temporizador/refresco GUI no cambia el tiempo simulado.
 - Actualizaciones desde ConcurrentEngine llegan al hilo UI principal; carga concurrente de snapshots no toca widgets desde workers.
 - Timeline conserva orden, marcas de tiempo y proporciones; espera/idle no aparece como ejecución de PID.
 - Mapa refleja individualmente tamaños cargados, total y disponible sin direcciones físicas.
