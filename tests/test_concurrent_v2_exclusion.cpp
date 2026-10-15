@@ -165,5 +165,92 @@ int main() {
         EXPECT_TRUE(s.tiempoSimuladoMs > 0);
     }
 
+    // Caso 4: el coordinador rechaza un worker cuyo PID/duracion son plausibles
+    // pero cuyo motivo contradice el estado terminal esperado.
+    {
+        ConcurrentEngineV2 engine(Configuracion{256});
+        engine.activarPuertaRafagaPruebas(true);
+        EXPECT_TRUE(engine.agregarProceso(alta(70, 20, 5)));
+        const EstadoSistema antes = engine.obtenerEstado();
+        EXPECT_TRUE(engine.iniciar());
+        EXPECT_TRUE(engine.pausar());
+
+        PasoRetenido paso(engine, 70);
+        EXPECT_TRUE(paso.enRun());
+        engine.forzarMotivoWorkerPruebas(MotivoFinTurno::QUANTUM_AGOTADO);
+        const ResultadoPaso resultado = paso.terminar();
+        EXPECT_EQ(resultado.codigo, CodigoResultado::ESTADO_INVALIDO);
+
+        const EstadoSistema despues = engine.obtenerEstado();
+        const Proceso* proceso = buscar(despues, 70);
+        EXPECT_TRUE(proceso != nullptr);
+        if (proceso != nullptr) {
+            EXPECT_EQ(proceso->estado, Estado::READY);
+            EXPECT_EQ(proceso->tiempoCpuConsumidoMs, 0);
+            EXPECT_EQ(proceso->tiempoCpuRestanteMs, 5);
+            EXPECT_EQ(proceso->ticketReady, buscar(antes, 70)->ticketReady);
+        }
+        EXPECT_EQ(despues.tiempoSimuladoMs, 0);
+        EXPECT_EQ(despues.memoriaUsadaBytes, 20);
+        EXPECT_EQ(despues.timeline.size(), 0U);
+        EXPECT_EQ(contarEventos(despues, TipoEvento::READY_A_RUN, 70), 0);
+        EXPECT_EQ(engine.cantidadWorkers(), 1U);
+        EXPECT_EQ(invariantesVioladas(despues), 0);
+
+        PasoRetenido cancelado(engine, 70);
+        EXPECT_TRUE(cancelado.enRun());
+        engine.forzarMotivoWorkerPruebas(MotivoFinTurno::CANCELADO);
+        EXPECT_EQ(cancelado.terminar().codigo,
+                  CodigoResultado::ESTADO_INVALIDO);
+        const EstadoSistema trasCancelado = engine.obtenerEstado();
+        const Proceso* procesoTrasCancelado = buscar(trasCancelado, 70);
+        EXPECT_TRUE(procesoTrasCancelado != nullptr);
+        if (procesoTrasCancelado != nullptr) {
+            EXPECT_EQ(procesoTrasCancelado->estado, Estado::READY);
+        }
+        EXPECT_EQ(trasCancelado.tiempoSimuladoMs, 0);
+        EXPECT_EQ(trasCancelado.timeline.size(), 0U);
+        EXPECT_EQ(contarEventos(trasCancelado, TipoEvento::READY_A_RUN, 70), 0);
+    }
+
+    // Caso 5: una excepción tras contabilizar un segmento revierte reloj, CPU,
+    // eventos, timeline, memoria y ticket. El coordinador sigue operativo.
+    {
+        ConcurrentEngineV2 engine(Configuracion{256});
+        EXPECT_TRUE(engine.agregarProceso(alta(80, 20, 40)));
+        const EstadoSistema antes = engine.obtenerEstado();
+        EXPECT_TRUE(engine.iniciar());
+        EXPECT_TRUE(engine.pausar());
+        engine.configurarFalloPasoPruebas(EtapaPasoPrueba::TRAS_SEGMENTO);
+
+        const ResultadoPaso rechazado = engine.siguientePaso();
+        EXPECT_EQ(rechazado.codigo, CodigoResultado::ESTADO_INVALIDO);
+        const EstadoSistema despues = engine.obtenerEstado();
+        const Proceso* proceso = buscar(despues, 80);
+        EXPECT_TRUE(proceso != nullptr);
+        if (proceso != nullptr) {
+            EXPECT_EQ(proceso->estado, Estado::READY);
+            EXPECT_EQ(proceso->tiempoCpuConsumidoMs, 0);
+            EXPECT_EQ(proceso->tiempoCpuRestanteMs, 40);
+            EXPECT_EQ(proceso->ticketReady, buscar(antes, 80)->ticketReady);
+        }
+        EXPECT_EQ(despues.tiempoSimuladoMs, 0);
+        EXPECT_EQ(despues.memoriaUsadaBytes, 20);
+        EXPECT_EQ(despues.timeline.size(), 0U);
+        EXPECT_EQ(contarEventos(despues, TipoEvento::READY_A_RUN, 80), 0);
+        EXPECT_EQ(contarEventos(despues, TipoEvento::CPU_EJECUTADA, 80), 0);
+        EXPECT_EQ(invariantesVioladas(despues), 0);
+
+        const ResultadoPaso siguiente = engine.siguientePaso();
+        EXPECT_EQ(siguiente.codigo, CodigoResultado::OK);
+        EXPECT_EQ(siguiente.tiempoAvanzadoMs, 30);
+        const EstadoSistema trasRecuperacion = engine.obtenerEstado();
+        const Proceso* procesoTrasRecuperacion = buscar(trasRecuperacion, 80);
+        EXPECT_TRUE(procesoTrasRecuperacion != nullptr);
+        if (procesoTrasRecuperacion != nullptr) {
+            EXPECT_EQ(procesoTrasRecuperacion->tiempoCpuConsumidoMs, 30);
+        }
+    }
+
     return test::finish();
 }
