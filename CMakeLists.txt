@@ -48,11 +48,11 @@ add_library(simulator_concurrent_v2
     concurrent/ConcurrentEngineV2.cpp
 )
 target_include_directories(simulator_concurrent_v2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(simulator_concurrent_v2 PUBLIC simulator_simulation Threads::Threads)
+target_link_libraries(simulator_concurrent_v2 PUBLIC simulator_core_v2 simulator_scheduler Threads::Threads)
 
 add_library(simulator_engine_session gui/EngineSession.cpp)
 target_include_directories(simulator_engine_session PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
-target_link_libraries(simulator_engine_session PUBLIC simulator_concurrent_v2)
+target_link_libraries(simulator_engine_session PUBLIC simulator_concurrent_v2 simulator_simulation)
 
 
 if(MSVC)
