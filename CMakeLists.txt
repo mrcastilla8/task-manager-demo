@@ -18,6 +18,7 @@ add_library(simulator_core_v2
     core/v2/Proceso.cpp
     core/v2/ListaProcesos.cpp
     core/v2/Memoria.cpp
+    core/v2/AdmisorProcesos.cpp
 )
 
 target_include_directories(simulator_core_v2 PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
