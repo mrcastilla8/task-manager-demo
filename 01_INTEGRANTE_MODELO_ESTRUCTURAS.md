@@ -1,266 +1,35 @@
-# Integrante 1 — Modelo, Estructuras de Datos y Memoria
+# Integrante 1 — Modelo, estructuras de datos y memoria
 
-## Objetivo
+Este módulo sostiene los datos que usan Scheduler, motores y GUI. Esta versión consolida el documento de `master`, también presente sin diferencias en `castilla`, con los requisitos académicos y la especificación compartida.
 
-Construir las estructuras fundamentales que representan los procesos y los recursos simulados del sistema.
+## Responsabilidad
 
-Este integrante **no implementa el algoritmo de planificación**, **no crea threads** y **no desarrolla la GUI**.
+Mantener la representación de procesos y el almacenamiento dinámico, y modelar la capacidad y ocupación de memoria. No decide prioridades, no ejecuta procesos y no implementa GUI o threads.
 
----
+## Contratos v1.0
 
-## Responsabilidades
+Los encabezados vigentes son [Proceso](contracts/Proceso.h), [Estado](contracts/Estado.h), [Configuración](contracts/Configuracion.h), [Estado del sistema](contracts/EstadoSistema.h), [Evento](contracts/Evento.h) e [IExecutionEngine](contracts/IExecutionEngine.h). La referencia normativa de unidades, errores, orden y precedencia es [contracts/README.md](contracts/README.md).
 
-### 1. Modelo `Proceso`
+Las notas del docente enumeran ID, nombre, tamaño en bytes, estado, cuota de tiempo en milisegundos y prioridad (pág. 23). El contrato actual contempla tiempos y estado, pero no una cuota individual; mantiene quantum global y prioridades de equipo 1–10. La diferencia está en DP-01 y DP-04. No agregues campos ni cambies validaciones mientras la versión 1.0 esté congelada.
 
-Implementar la representación de un proceso con, como mínimo:
+## Estructura dinámica y semántica de cola
 
-```cpp
-struct Proceso {
-    int pid;
-    std::string nombre;
-    int tamanioBytes;
+La lista de procesos permite altas, búsqueda, eliminación y filtros por estado según la API implementada en `ColaProcesos`. No selecciona el proceso que obtiene CPU. La estructura actual usa `std::list<Proceso>` y conserva orden de inserción.
 
-    int prioridadBase;
-    int prioridadActual;
+Las notas mencionan lista enlazada simple con referencias al inicio y al final (pág. 25). Esto se registra como propuesta estructural del material cuya obligatoriedad para el proyecto completo está pendiente (DP-09). No reemplazar unilateralmente `std::list`. Tampoco usar “FIFO” para afirmar que el contenedor es un scheduler: FIFO es una regla de orden de llegada; prioridad y reingreso RR corresponden al Scheduler y motor. Los pseudocódigos académicos de cola y prioridad de las págs. 25–26 son incompletos/inconsistentes, por lo que no deben copiarse como API.
 
-    int tiempoTotal;
-    int tiempoRestante;
-    int tiempoEspera;
+## Memoria simulada
 
-    int quantumConsumido;
+La implementación actual rechaza la carga si el proceso es inválido, ya está cargado o supera el espacio disponible; una carga fallida no altera el estado. Libera bytes por PID y expone capacidad/uso disponible. No representa direcciones ni algoritmos de asignación.
 
-    Estado estado;
+La GUI necesita un mapa conceptual de ocupación por proceso, además de capacidad total y utilizada (notas, págs. 23 y 29; DP-08). La figura debe reflejar los procesos cargados y su tamaño relativo sin inventar direcciones físicas, fragmentación, paginación ni reemplazo.
 
-    long ordenLlegada;
-};
-```
+## Casos y criterios
 
-Puede ampliarse si otros módulos necesitan información adicional, pero no debe introducir lógica propia del scheduler.
+Utiliza [casos P1, P3 y P9](docs/CASOS_REFERENCIA.md) y la matriz [RD-01–RD-03, RD-12, DP-09](docs/MATRIZ_TRAZABILIDAD.md). El módulo se considera documentalmente alineado cuando:
 
----
-
-## 2. Estados
-
-Definir:
-
-```cpp
-enum class Estado {
-    READY,
-    RUN,
-    WAIT,
-    FINISH,
-    CANCEL
-};
-```
-
-Debe existir una función auxiliar para convertir el estado a texto.
-
-Ejemplo:
-
-```cpp
-std::string estadoToString(Estado estado);
-```
-
----
-
-## 3. Estructura dinámica de procesos
-
-Implementar una estructura encargada de almacenar procesos.
-
-Funciones mínimas:
-
-```cpp
-class ColaProcesos {
-public:
-    void agregar(const Proceso& proceso);
-    bool eliminar(int pid);
-
-    Proceso* buscar(int pid);
-    const Proceso* buscar(int pid) const;
-
-    std::vector<Proceso> obtenerTodos() const;
-    std::vector<Proceso> obtenerPorEstado(Estado estado) const;
-
-    bool vacia() const;
-    size_t cantidad() const;
-};
-```
-
-La estructura no decide qué proceso tiene mayor prioridad. Esa responsabilidad corresponde al Scheduler.
-
----
-
-## 4. Memoria simulada
-
-Implementar un modelo simple de memoria.
-
-Ejemplo:
-
-```cpp
-class Memoria {
-private:
-    int capacidadTotal;
-    int memoriaUtilizada;
-
-public:
-    bool puedeCargar(const Proceso& proceso) const;
-    bool cargar(const Proceso& proceso);
-    void liberar(int pid);
-
-    int obtenerTotal() const;
-    int obtenerUtilizada() const;
-    int obtenerDisponible() const;
-};
-```
-
-No implementar:
-
-- paginación;
-- segmentación;
-- memoria virtual;
-- reemplazo de páginas.
-
-El objetivo es únicamente representar visualmente cuánto espacio ocupan los procesos.
-
----
-
-## 5. Eventos y estructuras comunes
-
-Colaborar en la definición de:
-
-```text
-contracts/
-    Proceso.h
-    Estado.h
-    Evento.h
-    EstadoSistema.h
-```
-
-Ejemplo de evento:
-
-```cpp
-enum class TipoEvento {
-    PROCESS_CREATED,
-    PROCESS_READY,
-    PROCESS_RUNNING,
-    QUANTUM_FINISHED,
-    PROCESS_WAITING,
-    PROCESS_FINISHED,
-    PROCESS_CANCELLED,
-    PRIORITY_CHANGED
-};
-```
-
----
-
-## Entregables
-
-```text
-contracts/
-    Proceso.h
-    Estado.h
-    Evento.h
-    EstadoSistema.h
-
-core/
-    ColaProcesos.h
-    ColaProcesos.cpp
-    Memoria.h
-    Memoria.cpp
-```
-
-Además:
-
-```text
-tests/
-    test_proceso.cpp
-    test_cola.cpp
-    test_memoria.cpp
-```
-
----
-
-## Pruebas mínimas
-
-### Agregar procesos
-
-```text
-Agregar A
-Agregar B
-Agregar C
-
-cantidad = 3
-```
-
-### Buscar proceso
-
-```text
-buscar(pid=2)
-→ B
-```
-
-### Eliminar proceso
-
-```text
-A → B → C
-
-eliminar(B)
-
-A → C
-```
-
-### Memoria
-
-```text
-Memoria total = 2048 MB
-
-A = 500 MB
-B = 1000 MB
-
-utilizada = 1500 MB
-disponible = 548 MB
-```
-
-Debe rechazarse un proceso que exceda la capacidad disponible.
-
----
-
-## No es responsabilidad de este integrante
-
-No implementar:
-
-- cálculo de prioridades;
-- aging;
-- Round Robin;
-- selección del siguiente proceso;
-- ejecución del quantum;
-- threads;
-- mutex;
-- condition variables;
-- animaciones;
-- widgets;
-- timeline gráfico.
-
----
-
-## Dependencias
-
-Puede trabajar desde el inicio.
-
-Los otros integrantes dependen del contrato de `Proceso`, `Estado` y `EstadoSistema`, por lo que estos archivos deben estabilizarse temprano.
-
-Una vez acordados los campos comunes, evitar cambios incompatibles.
-
----
-
-## Criterios de aceptación
-
-El módulo se considera terminado cuando:
-
-- pueden crearse procesos válidos;
-- pueden buscarse y eliminarse por PID;
-- pueden filtrarse por estado;
-- la estructura admite altas y bajas dinámicas;
-- la memoria simulada carga y libera procesos;
-- los tests pasan;
-- el módulo no contiene lógica gráfica, de scheduling ni concurrencia.
+- la estructura dinámica y la memoria se describen con el comportamiento que realmente exponen;
+- se distingue almacenamiento FIFO de planificación por prioridad y rotación Round Robin;
+- la diferencia entre lista simple académica y `std::list` implementada se mantiene explícita;
+- cuota individual, escala 1–3 y cualquier cambio de memoria quedan como decisión hasta aprobación;
+- no se alteran los contratos congelados.
