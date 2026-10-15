@@ -1,6 +1,7 @@
 #include "concurrent/ProcessThread.h"
 
 #include <algorithm>
+#include <chrono>
 
 ProcessThread::ProcessThread(int pid)
     : pid_(pid),
@@ -58,6 +59,14 @@ void ProcessThread::solicitarDetencion() {
     }
 }
 
+void ProcessThread::liberarRafaga() {
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        liberada_ = true;
+    }
+    cvTurno_.notify_all();
+}
+
 bool ProcessThread::estaDetenido() const noexcept {
     std::lock_guard<std::mutex> lock(mutex_);
     return detener_;
@@ -72,6 +81,18 @@ void ProcessThread::ejecutarLoopWorker() {
 
         if (detener_) {
             break;
+        }
+
+        if (solicitudActual_.esperarLiberacion) {
+            // Puerta de pruebas: acotada y cancelable. Libera el mutex del worker
+            // mientras espera para no bloquear solicitarDetencion().
+            cvTurno_.wait_for(
+                lock, std::chrono::milliseconds(solicitudActual_.limiteEsperaMs),
+                [this]() { return liberada_ || detener_; });
+            liberada_ = false;
+            if (detener_) {
+                break;
+            }
         }
 
         // Calculo de rafaga logica dentro del worker thread real

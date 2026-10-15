@@ -32,6 +32,11 @@ struct SolicitudTurno {
     std::int64_t tiempoRestante{0};
     bool tieneIO{false};
     std::int64_t cpuRestanteParaIO{0};
+    // Solo pruebas: el worker espera `ProcessThread::liberarRafaga()` antes de
+    // calcular la rafaga, con un limite maximo para no colgar nunca. No es un
+    // retardo fisico de CPU y no interviene en el reloj ni en el CPU consumido.
+    bool esperarLiberacion{false};
+    std::int64_t limiteEsperaMs{5000};
 };
 
 struct ResultadoRafaga {

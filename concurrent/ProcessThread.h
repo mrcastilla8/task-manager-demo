@@ -28,6 +28,10 @@ public:
     // Solicita la detencion segura del hilo y hace join si es joinable.
     void solicitarDetencion();
 
+    // Solo pruebas: libera una rafaga retenida por SolicitudTurno::esperarLiberacion.
+    // Si se llama antes de que el worker llegue a la puerta, la libera igualmente.
+    void liberarRafaga();
+
     bool estaDetenido() const noexcept;
 
 private:
@@ -41,6 +45,7 @@ private:
     bool permisoEjecucion_{false};
     bool turnoCompletado_{false};
     bool detener_{false};
+    bool liberada_{false};
 
     SolicitudTurno solicitudActual_;
     ResultadoRafaga resultadoActual_;
