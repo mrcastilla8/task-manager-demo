@@ -28,11 +28,17 @@ public:
     std::vector<Proceso> obtenerTodos() const;
     std::vector<Proceso> obtenerPorEstado(Estado estado) const;
 
+    // Aplica las transiciones operativas v2; repetir el estado actual es
+    // idempotente y FINISH/CANCEL no admiten salidas.
     bool actualizarEstado(int pid, Estado estado) noexcept;
     bool actualizarPrioridad(int pid, Prioridad prioridad) noexcept;
+    // CPU consumida solo avanza y CPU restante solo disminuye durante la vida
+    // del proceso en la lista; una instancia nueva comienza en cero.
     bool actualizarCpu(int pid, std::int64_t consumidoMs,
                        std::int64_t restanteMs) noexcept;
     bool actualizarTiempoEspera(int pid, std::int64_t esperaMs) noexcept;
+    // El Scheduler asigna tickets globales; cero significa sin asignar.
+    // Este setter local permite conservar o avanzar el ticket, nunca volver.
     bool actualizarTicketReady(int pid, std::uint64_t ticket) noexcept;
 
     // Clasifica la población activa y persiste el lote en los nodos. No decide

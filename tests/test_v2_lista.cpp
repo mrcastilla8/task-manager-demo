@@ -4,6 +4,8 @@
 
 #include <utility>
 #include <type_traits>
+#include <cstdint>
+#include <limits>
 
 using namespace ConcurrentSimulator::v2;
 
@@ -37,6 +39,9 @@ int main() {
     EXPECT_FALSE(lista.agregar(invalido));
     EXPECT_EQ(lista.cantidad(), 3U);
     EXPECT_EQ(lista.buscar(2)->estado, Estado::WAIT);
+    EXPECT_EQ(lista.buscar(2)->tiempoCpuConsumidoMs, 0);
+    EXPECT_EQ(lista.buscar(2)->tiempoCpuRestanteMs, 100);
+    EXPECT_EQ(lista.buscar(2)->ticketReady, 0U);
     EXPECT_TRUE(lista.buscar(99) == nullptr);
     const auto todos = lista.obtenerTodos();
     EXPECT_EQ(todos.size(), 3U);
@@ -45,11 +50,58 @@ int main() {
     EXPECT_EQ(todos[2].pid, 3);
     EXPECT_EQ(lista.obtenerPorEstado(Estado::READY).size(), 2U);
 
+    // Transiciones operativas y terminalidad: los fallos conservan el estado.
+    ListaProcesos terminales;
+    EXPECT_TRUE(terminales.agregar(proceso(20)));
+    EXPECT_TRUE(terminales.agregar(proceso(21, Estado::WAIT)));
+    EXPECT_TRUE(terminales.agregar(proceso(22)));
+    EXPECT_TRUE(terminales.agregar(proceso(23)));
+    EXPECT_TRUE(terminales.agregar(proceso(24)));
+    EXPECT_TRUE(terminales.actualizarEstado(20, Estado::RUN));
+    EXPECT_TRUE(terminales.actualizarEstado(20, Estado::WAIT));
+    EXPECT_TRUE(terminales.actualizarEstado(20, Estado::READY));
+    EXPECT_TRUE(terminales.actualizarEstado(20, Estado::RUN));
+    EXPECT_TRUE(terminales.actualizarCpu(20, 100, 0));
+    EXPECT_TRUE(terminales.actualizarEstado(20, Estado::FINISH));
+    EXPECT_TRUE(terminales.actualizarEstado(20, Estado::FINISH));
+    for (Estado destino : {Estado::READY, Estado::RUN, Estado::WAIT,
+                           Estado::CANCEL}) {
+        EXPECT_FALSE(terminales.actualizarEstado(20, destino));
+        EXPECT_EQ(terminales.buscar(20)->estado, Estado::FINISH);
+    }
+    EXPECT_TRUE(terminales.actualizarEstado(21, Estado::CANCEL));
+    EXPECT_TRUE(terminales.actualizarEstado(21, Estado::CANCEL));
+    for (Estado destino : {Estado::READY, Estado::RUN, Estado::WAIT,
+                           Estado::FINISH}) {
+        EXPECT_FALSE(terminales.actualizarEstado(21, destino));
+        EXPECT_EQ(terminales.buscar(21)->estado, Estado::CANCEL);
+    }
+    EXPECT_FALSE(terminales.actualizarEstado(22, Estado::FINISH));
+    EXPECT_EQ(terminales.buscar(22)->estado, Estado::READY);
+    EXPECT_FALSE(terminales.actualizarEstado(22, Estado::WAIT));
+    EXPECT_EQ(terminales.buscar(22)->estado, Estado::READY);
+    EXPECT_TRUE(terminales.actualizarEstado(22, Estado::CANCEL));
+    EXPECT_TRUE(terminales.actualizarEstado(24, Estado::RUN));
+    EXPECT_TRUE(terminales.actualizarEstado(24, Estado::CANCEL));
+    EXPECT_TRUE(terminales.actualizarTicketReady(23, 1));
+    EXPECT_TRUE(terminales.actualizarTicketReady(
+        23, (std::numeric_limits<std::uint64_t>::max)()));
+    EXPECT_FALSE(terminales.actualizarTicketReady(23, 1));
+    EXPECT_EQ(terminales.buscar(23)->ticketReady,
+              (std::numeric_limits<std::uint64_t>::max)());
+
+    EXPECT_TRUE(lista.actualizarEstado(2, Estado::READY));
     EXPECT_TRUE(lista.actualizarEstado(2, Estado::RUN));
     EXPECT_TRUE(lista.actualizarPrioridad(2, Prioridad::P1));
     EXPECT_TRUE(lista.actualizarCpu(2, 20, 80));
     EXPECT_TRUE(lista.actualizarTiempoEspera(2, 7));
     EXPECT_TRUE(lista.actualizarTicketReady(2, 42));
+    EXPECT_TRUE(lista.actualizarCpu(2, 20, 80));  // idempotente
+    EXPECT_FALSE(lista.actualizarCpu(2, 19, 81)); // CPU consumida retrocede
+    EXPECT_FALSE(lista.actualizarCpu(2, 21, 80)); // restante sube sin conservar total
+    EXPECT_FALSE(lista.actualizarCpu(2, -1, 101));
+    EXPECT_FALSE(lista.actualizarCpu(2, 101, -1));
+    EXPECT_FALSE(lista.actualizarCpu(2, 50, 40)); // no conserva el total
     EXPECT_FALSE(lista.actualizarCpu(2, 101, 0));
     EXPECT_FALSE(lista.actualizarTiempoEspera(2, -1));
     EXPECT_FALSE(lista.actualizarEstado(2, static_cast<Estado>(255)));
@@ -62,6 +114,12 @@ int main() {
     EXPECT_EQ(lista.buscar(2)->tiempoEsperaMs, 7);
     EXPECT_EQ(lista.buscar(2)->ticketReady, 42U);
     EXPECT_EQ(lista.buscar(2)->tiempoCpuConsumidoMs, 20);
+    EXPECT_EQ(lista.buscar(2)->tiempoCpuRestanteMs, 80);
+    EXPECT_FALSE(lista.actualizarTicketReady(2, 41));
+    EXPECT_EQ(lista.buscar(2)->ticketReady, 42U);
+    EXPECT_TRUE(lista.actualizarTicketReady(2, 42)); // misma asignación
+    EXPECT_TRUE(lista.actualizarTicketReady(2, 43));
+    EXPECT_EQ(lista.buscar(2)->ticketReady, 43U);
 
     EXPECT_TRUE(lista.eliminar(2));  // medio
     EXPECT_TRUE(lista.eliminar(1));  // primero
@@ -76,6 +134,7 @@ int main() {
     EXPECT_TRUE(lista.agregar(proceso(11)));
     ListaProcesos copia(lista);
     EXPECT_EQ(copia.cantidad(), 2U);
+    EXPECT_TRUE(copia.actualizarEstado(10, Estado::RUN));
     EXPECT_TRUE(copia.actualizarEstado(10, Estado::WAIT));
     EXPECT_EQ(lista.buscar(10)->nombre, "p10");
     EXPECT_EQ(lista.buscar(10)->estado, Estado::READY);

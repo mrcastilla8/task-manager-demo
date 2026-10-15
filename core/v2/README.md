@@ -57,3 +57,27 @@ inserción falla o lanza; la inserción normal de `ListaProcesos` tiene garantí
 fuerte y deja la lista intacta al fallar. La variante `detail` permite probar
 fallos de inserción y no se ofrece como API para Scheduler/motores. Estas
 operaciones no son thread-safe ni reemplazan la coordinación del motor.
+
+`actualizarEstado` aplica las transiciones operativas de
+[`CONTRATOS_V2.md`](../../docs/CONTRATOS_V2.md#scheduler-y-estados):
+READY→RUN/CANCEL, RUN→READY/WAIT/CANCEL y WAIT→READY/CANCEL; RUN→FINISH solo
+cuando la CPU restante es cero. FINISH y CANCEL son terminales. Repetir el
+mismo estado, incluso uno terminal, devuelve `true` sin mutación; toda otra
+transición no permitida devuelve `false` y conserva el proceso. Esto solo
+protege el modelo y no define cuándo ni en qué frontera temporal se cancela.
+
+`actualizarCpu` acepta únicamente un par consumido/restante no negativo que
+conserve el total, con CPU consumida no menor que la almacenada y CPU restante
+no mayor. La construcción de una instancia inicia CPU consumida en cero; el
+módulo no mide tiempo ni define un reinicio de sesión.
+
+El Scheduler/motor es responsable de asignar tickets READY globales nuevos al
+admitir o reingresar un proceso a READY, conforme a DP-05. El valor inicial
+cero significa “aún sin ticket asignado”; `actualizarTicketReady` es la
+operación local para conservar el valor o avanzar a uno mayor. Un retroceso se
+rechaza sin mutación; repetir el mismo ticket es idempotente. Castilla no
+garantiza unicidad ni orden global. El contador `uint64_t` no debe envolver:
+la respuesta al agotamiento (error de límite o renumeración estable) sigue
+pendiente de ratificación según la propuesta 11 de
+`docs/DECISIONES_APROBADAS.md`; el generador debe detectar el límite antes de
+incrementar.

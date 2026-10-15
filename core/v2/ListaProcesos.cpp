@@ -128,6 +128,36 @@ bool ListaProcesos::actualizarEstado(int pid, Estado estado) noexcept {
     if (nodo == nullptr) {
         return false;
     }
+    const Estado actual = nodo->proceso.estado;
+    // Repetir el estado actual es inocuo, incluidos los dos estados terminales.
+    if (actual == estado) {
+        return true;
+    }
+
+    // Las transiciones operativas aprobadas para v2. FINISH solo se alcanza
+    // desde RUN cuando la CPU ya se agotó; CANCEL está permitido desde todo
+    // estado activo. Los terminales no tienen salidas.
+    bool permitida = false;
+    switch (actual) {
+        case Estado::READY:
+            permitida = estado == Estado::RUN || estado == Estado::CANCEL;
+            break;
+        case Estado::RUN:
+            permitida = estado == Estado::READY || estado == Estado::WAIT ||
+                        estado == Estado::CANCEL ||
+                        (estado == Estado::FINISH &&
+                         nodo->proceso.tiempoCpuRestanteMs == 0);
+            break;
+        case Estado::WAIT:
+            permitida = estado == Estado::READY || estado == Estado::CANCEL;
+            break;
+        case Estado::FINISH:
+        case Estado::CANCEL:
+            return false;
+    }
+    if (!permitida) {
+        return false;
+    }
     nodo->proceso.estado = estado;
     return true;
 }
@@ -155,7 +185,9 @@ bool ListaProcesos::actualizarCpu(int pid, std::int64_t consumidoMs,
     Nodo* nodo = buscarNodo(pid);
     if (nodo == nullptr || consumidoMs < 0 || restanteMs < 0 ||
         consumidoMs > nodo->proceso.tiempoCpuTotalMs ||
-        restanteMs != nodo->proceso.tiempoCpuTotalMs - consumidoMs) {
+        restanteMs != nodo->proceso.tiempoCpuTotalMs - consumidoMs ||
+        consumidoMs < nodo->proceso.tiempoCpuConsumidoMs ||
+        restanteMs > nodo->proceso.tiempoCpuRestanteMs) {
         return false;
     }
     nodo->proceso.tiempoCpuConsumidoMs = consumidoMs;
@@ -176,7 +208,7 @@ bool ListaProcesos::actualizarTiempoEspera(int pid,
 bool ListaProcesos::actualizarTicketReady(int pid,
                                           std::uint64_t ticket) noexcept {
     Nodo* nodo = buscarNodo(pid);
-    if (nodo == nullptr) {
+    if (nodo == nullptr || ticket < nodo->proceso.ticketReady) {
         return false;
     }
     nodo->proceso.ticketReady = ticket;
