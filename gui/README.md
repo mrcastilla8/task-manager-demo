@@ -25,9 +25,8 @@ ctest --test-dir build-gui -C Debug --output-on-failure
 ```
 
 La opción GUI es OFF por defecto. El build base sigue sin requerir Qt. La prueba
-`test_gui_presentation` tampoco requiere Qt; `test_gui` usa plataforma offscreen.
-Para conservar una captura durante esa prueba, definir
-`SIMULATOR_GUI_SCREENSHOT` con una ruta absoluta PNG.
+`test_gui_presentation` tampoco requiere Qt. `test_gui` y `test_gui_models` usan
+plataforma offscreen, sin mostrar ventanas, generar capturas ni esperar animaciones.
 
 En el entorno donde se preparó este avance hay herramientas portables ignoradas
 en `build-tools/` y build en `build-gui-qt/`. Se puede abrir la aplicación con:
@@ -52,13 +51,33 @@ Las dependencias y ejecutables no se publican en Git.
 - Formulario de alta con PID, nombre, bytes y ms enteros de 64 bits, E/S opcional,
   validación y mensajes. Sin prioridad manual, quantum global ni aging.
 - Anterior/siguiente/reproducción/pausa/inicio de vistas y cadencia de presentación.
-  **Los botones recorren fixtures, no ejecutan una simulación.** El último escenario
-  es una fixture independiente de gaps. El formulario de preview no admite procesos.
+  **Los botones recorren fixtures, no ejecutan una simulación.** El selector separa
+  la sesión principal, rotación por cuota y gaps. Cada escenario empieza en su propio
+  contexto; llegar al final detiene la reproducción, sin saltar a otra sesión.
+  Cambiar escenario o volver al inicio borra selección/scroll del contexto anterior;
+  el zoom elegido se conserva. El formulario de preview no admite procesos.
 
 `PreviewFrames` contiene snapshots preparados; no implementa `IExecutionEngine`,
 no clasifica ni planifica. RUN transitorio se muestra mediante snapshots explícitos,
 sin inventar replay contractual. Las vistas reciben copias y se actualizan en el
-hilo Qt. El timer de refresco de motor solamente llama `obtenerEstado()`.
+hilo Qt. El timer de refresco de motor solamente llama `obtenerEstado()`. Una
+publicación idéntica no vuelve a actualizar las vistas.
+
+## Recuperación de lectura y selección
+
+Si `obtenerEstado()` falla, se conserva la última vista válida, se muestra el error
+y se deshabilitan paso/pausa/alta/reinicio/cancelación hasta recuperar una lectura.
+Si falla la primera lectura de una sesión, las vistas quedan vacías, sin fixtures
+de otra sesión. El timer de un solo disparo programa reintentos a 300, 600, 1200,
+2400, 4800 y como máximo 5000 ms; el botón **Reintentar lectura del snapshot** permite
+solicitar una lectura inmediata. El éxito restablece la consulta normal a 150 ms,
+incluso si el snapshot recuperado es idéntico al anterior. No se reinicia el motor,
+no se envían pasos, no se altera su tiempo y no se oculta el error mientras persista.
+
+Cancelar exige selección de fila efectiva, PID positivo y estado READY/RUN/WAIT
+publicado. FINISH/CANCEL, selección vacía y snapshots no disponibles deshabilitan
+el botón; el slot vuelve a comprobar estas condiciones antes de delegar. El motor
+sigue siendo autoritativo ante una transición ocurrida después del último snapshot.
 
 ## Conectar las entregas del equipo
 
@@ -96,9 +115,24 @@ respuestas; no es un motor alternativo ni evidencia de conformidad de Aldana/Án
 
 No hay motores reales enlazados, continuidad real ni replay normativo de eventos.
 El mapa de memoria es conceptual; no representa fragmentación ni direcciones.
-El log y la escena conservan todo el snapshot sin truncarlo; la reconstrucción es
-lineal y debe perfilarse/virtualizarse para sesiones grandes. La validación local
-del formulario no sustituye validación/admisión autoritativa del motor.
+El log conserva todos los eventos mediante un modelo de datos; Qt solicita las
+celdas visibles, sin crear un objeto por celda ni medir todas las filas al refrescar.
+Altas/bajas de filas y correcciones interiores emiten cambios del modelo sin reset.
+La selección de proceso se conserva por PID y el scroll se restaura al actualizar;
+el log sigue el final solo si ya se estaba allí.
+
+El timeline conserva sus bloques y gaps en un solo item de escena; al pintar busca
+por tiempo y dibuja únicamente los intervalos expuestos. Una publicación sin cambios
+no reconstruye intervalos; zoom/scroll no reconstruyen el historial. Al cambiar
+el timeline se validan/recalculan sus spans conservando zoom y desplazamiento.
+El widget RAM no copia eventos ni timeline.
+
+La interfaz candidata entrega snapshots completos sin revisión/deltas: obtenerlos
+y compararlos exactamente sigue teniendo coste O(n) respecto del historial. El cache
+evita copias/reconstrucciones UI en publicaciones idénticas; las tablas actualizan
+solo los registros cambiados o añadidos. No se inventa un campo de versión ni se
+deduce inmutabilidad del tamaño del vector. La validación local del formulario
+no sustituye validación/admisión autoritativa del motor.
 
 El cierre de integrante 5 sigue pendiente de fábricas, protocolo asíncrono/driver,
 conmutación segura, pruebas de equivalencia y aceptación del equipo. Véase la
@@ -112,13 +146,23 @@ Debug. Se ejecutaron configuración/build y CTest en dos directorios:
 | Configuración | Resultado observado |
 |---|---|
 | `build-base`, GUI OFF, BUILD_TESTING ON | 5/5 tests PASS; no se busca Qt |
-| `build-gui-qt`, GUI ON, BUILD_TESTING ON | 6/6 tests PASS; interacción Qt offscreen |
+| `build-gui-qt`, GUI ON, BUILD_TESTING ON | 7/7 tests PASS; modelos/controladores Qt offscreen |
 
 La suite Qt comprueba lectura desde hilo UI, refresco sin pasos, zoom sin avance,
 RUN explícito, cuota fijada frente a vigente, validación E/S y overflow de entrada,
-delegación de paso/alta/cancelación/reinicio, rechazo por memoria y errores de snapshot.
-Se inspeccionaron capturas Qt de READY, RUN parcial e idle, generadas por la prueba;
-no son capturas de una ejecución real de los motores.
+delegación de paso/cancelación/reinicio, fallo inicial/posterior de snapshot y
+recuperación automática/manual. Se sustituyeron las automatizaciones gráficas de
+la primera entrega por llamadas directas a modelos/controles: no hay `show()`,
+capturas ni esperas `qWait` en las pruebas.
+
+| Corrección | Evidencia automatizada |
+|---|---|
+| POMA-01 | `test_gui_presentation` recorre cada escenario con reloj monótono y prueba que `next()` no cruza sesiones; `test_gui` comprueba selector/final/reinicio |
+| POMA-02 | `test_gui_models`: 50.000 eventos, 50.000 bloques, 5.000 procesos; 20 snapshots repetidos no emiten cambios/reset ni cambian revisiones; append y edición interior sin reset; escena de un solo item |
+| POMA-03 | `test_gui_presentation` prueba backoff/tope; `test_gui` prueba fallo inicial, vistas vacías, último snapshot conservado, timer rearmado y recuperación automática/manual, incluso sin cambios de datos |
+| POMA-04 | `test_gui`: sin selección, FINISH y CANCEL no envían cancelación; WAIT habilita; fallo de snapshot bloquea acciones |
+| POMA-05 | `test_gui_models`: selección por PID tras cambios/reordenamiento, scroll horizontal/vertical, seguimiento del final, zoom y scroll de timeline conservados |
+| POMA-06 | Pruebas sin Qt de navegación/comparación/reintento; pruebas Qt de modelos/controladores; refrescos, errores y zoom no cambian reloj ni piden pasos |
 
 Para reproducir con las herramientas portables locales, desde la raíz:
 
@@ -128,12 +172,14 @@ $cmake = "$PWD/build-tools/python/cmake/data/bin/cmake.exe"
 $ctest = "$PWD/build-tools/python/cmake/data/bin/ctest.exe"
 & $cmake -S . -B build-gui-qt -G Ninja "-DCMAKE_MAKE_PROGRAM=$PWD/build-tools/ninja/bin/ninja.exe" "-DCMAKE_CXX_COMPILER=$PWD/build-tools/Qt/Tools/mingw1310_64/bin/g++.exe" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DSIMULATOR_BUILD_GUI_PREVIEW=ON "-DCMAKE_PREFIX_PATH=$PWD/build-tools/Qt/6.8.3/mingw_64"
 & $cmake --build build-gui-qt --parallel 4
-$env:SIMULATOR_GUI_SCREENSHOT = "$PWD/build-gui-qt/preview.png"
 & $ctest --test-dir build-gui-qt --output-on-failure
+& $cmake -S . -B build-base -G Ninja "-DCMAKE_MAKE_PROGRAM=$PWD/build-tools/ninja/bin/ninja.exe" "-DCMAKE_CXX_COMPILER=$PWD/build-tools/Qt/Tools/mingw1310_64/bin/g++.exe" -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTING=ON -DSIMULATOR_BUILD_GUI_PREVIEW=OFF
+& $cmake --build build-base --parallel 3
+& $ctest --test-dir build-base --output-on-failure
 ```
 
 Para la base, configurar un directorio separado con GUI OFF y sin
-`CMAKE_PREFIX_PATH`, conservando compilador y Ninja. Capturas esperadas:
-`build-gui-qt/preview.png`, `preview-run.png`, `preview-idle.png`.
+`CMAKE_PREFIX_PATH`, conservando compilador y Ninja. Las capturas locales de la
+primera entrega son históricas; la suite actual ya no las genera.
 Se verifican además enlaces de la documentación nueva y `git diff --check`.
 No se afirma prueba de concurrencia, equivalencia de motores ni CI remoto.
