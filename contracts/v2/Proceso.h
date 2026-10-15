@@ -33,14 +33,25 @@ struct Proceso {
     std::int64_t tiempoCpuRestanteMs{0};
     std::int64_t tiempoCpuConsumidoMs{0};
     std::int64_t tiempoEsperaMs{0};
-    std::int64_t cuotaActualMs{30};
     std::uint64_t ticketReady{0};
     Estado estado{Estado::READY};
     OperacionIO operacionIO;
 };
 
 constexpr std::int64_t cuotaMs(Prioridad prioridad) noexcept {
-    return static_cast<std::int64_t>(prioridad) * 10;
+    switch (prioridad) {
+        case Prioridad::P1:
+            return 10;
+        case Prioridad::P2:
+            return 20;
+        case Prioridad::P3:
+            return 30;
+    }
+    return 0;
+}
+
+constexpr std::int64_t cuotaVigenteMs(const Proceso& proceso) noexcept {
+    return cuotaMs(proceso.prioridad);
 }
 
 }  // namespace ConcurrentSimulator::v2

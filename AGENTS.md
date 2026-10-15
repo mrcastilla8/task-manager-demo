@@ -1,12 +1,12 @@
 # Guía de trabajo para agentes
 
-> **Fase 0 (2026-10-15):** DP-01–DP-11 fueron aprobadas por coordinación y formalizadas en [DECISIONES_APROBADAS.md](docs/DECISIONES_APROBADAS.md). Aplican al diseño futuro v2, no cambian v1.0. Contratos candidatos están en `contracts/v2/`; no se migran implementaciones ni se declaran integrados. Las propuestas técnicas no ratificadas permanecen separadas. Siga [CONTRATOS_V2.md](docs/CONTRATOS_V2.md), [MIGRACION_CONTRATOS_V2.md](docs/MIGRACION_CONTRATOS_V2.md) y gates de [WORKFLOW_DESARROLLO.md](docs/WORKFLOW_DESARROLLO.md). En caso de conflicto, encabezados v1 gobiernan código existente; decisiones aprobadas y contrato v2 gobiernan el destino de migración.
+> **Fase 0, formalizada 2026-10-15:** DP-01–DP-11 constan aprobadas por coordinación; la fecha exacta de aprobación original no fue suministrada. Aplican al diseño futuro v2, no cambian v1.0. Contratos candidatos están en `contracts/v2/`; no se migran implementaciones ni se declaran integrados. Las propuestas técnicas no ratificadas permanecen separadas. Siga [CONTRATOS_V2.md](docs/CONTRATOS_V2.md), [MIGRACION_CONTRATOS_V2.md](docs/MIGRACION_CONTRATOS_V2.md) y gates de [WORKFLOW_DESARROLLO.md](docs/WORKFLOW_DESARROLLO.md). En caso de conflicto, encabezados v1 gobiernan código existente; decisiones aprobadas y contrato v2 gobiernan el destino de migración.
 
 
 ## Lectura obligatoria
 
 1. Lee [README.md](README.md), [guía general](00_INDICACIONES_GENERALES_PROYECTO.md), [especificación funcional](docs/ESPECIFICACION_FUNCIONAL.md) y [matriz de trazabilidad](docs/MATRIZ_TRAZABILIDAD.md).
-2. Lee [decisiones pendientes](docs/DECISIONES_PENDIENTES.md) antes de implementar reglas de prioridad, tiempo, transiciones o GUI.
+2. Lee [decisiones aprobadas](docs/DECISIONES_APROBADAS.md) para reglas de destino v2. [Decisiones pendientes](docs/DECISIONES_PENDIENTES.md) conserva solo el historial de deliberación; no trates DP-01–DP-11 como tareas abiertas.
 3. Lee la asignación del integrante correspondiente (`01` a `05`) y luego el encabezado/API de [contratos v1.0](contracts/README.md).
 4. Para decisiones académicas, consulta [REQUISITOS_DOCENTE.md](docs/REQUISITOS_DOCENTE.md). Las notas del profesor y la transcripción están fuera del repositorio; solicita al usuario los archivos si no están disponibles en la tarea.
 

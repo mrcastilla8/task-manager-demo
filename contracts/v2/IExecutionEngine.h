@@ -11,6 +11,8 @@ enum class CodigoResultado {
     PID_DUPLICADO,
     MEMORIA_INSUFICIENTE,
     PID_INEXISTENTE,
+    PID_FINALIZADO,
+    PID_YA_CANCELADO,
     ESTADO_INVALIDO
 };
 
@@ -27,14 +29,15 @@ struct ResultadoPaso {
     std::int64_t tiempoAvanzadoMs{0};
 };
 
-// Los motores lógico y concurrente implementan esta misma interfaz y
-// publican la misma semántica observable. Un turno es una unidad de paso.
+// PROPUESTA TÉCNICA, no definida por DP-01–DP-11: los motores implementarían
+// esta interfaz común y publicarían la misma semántica observable.
 class IExecutionEngine {
 public:
     virtual ~IExecutionEngine() = default;
     virtual Resultado agregarProceso(const AltaProceso& proceso) = 0;
-    // Propuesta API: inexistente/terminal devuelve PID_INEXISTENTE; repetir
-    // cancelación no altera estado ni historia.
+    // Semántica propuesta: OK si cancela activo; PID_INEXISTENTE,
+    // PID_FINALIZADO o PID_YA_CANCELADO distinguen el estado sin mutarlo.
+    // Repetir cancelación es idempotente respecto del estado e historial.
     virtual Resultado cancelarProceso(int pid) = 0;
     virtual Resultado iniciar() = 0;  // Inicia o reanuda.
     virtual Resultado pausar() = 0;

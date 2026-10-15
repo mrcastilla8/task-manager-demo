@@ -5,15 +5,29 @@
 #include "contracts/v2/Proceso.h"
 
 #include <cstdint>
+#include <stdexcept>
 #include <vector>
 
 namespace ConcurrentSimulator::v2 {
 
 struct BloqueTimeline {
-    // pid == 0 representa CPU idle; los PID de proceso deben ser positivos.
-    int pid{0};
-    std::int64_t inicioMs{0};
-    std::int64_t finMs{0};
+    // Representa exclusivamente CPU realmente ejecutado por un proceso.
+    // Los intervalos idle son huecos inferidos fuera de este tipo.
+    BloqueTimeline(int pidProceso, std::int64_t inicio, std::int64_t fin)
+        : pid_(pidProceso), inicioMs_(inicio), finMs_(fin) {
+        if (pidProceso <= 0 || inicio < 0 || fin <= inicio) {
+            throw std::invalid_argument("BloqueTimeline requiere PID positivo y un intervalo CPU no vacío");
+        }
+    }
+
+    int pid() const noexcept { return pid_; }
+    std::int64_t inicioMs() const noexcept { return inicioMs_; }
+    std::int64_t finMs() const noexcept { return finMs_; }
+
+private:
+    int pid_;
+    std::int64_t inicioMs_;
+    std::int64_t finMs_;
 };
 
 struct EstadoSistema {
@@ -27,6 +41,8 @@ struct EstadoSistema {
     std::int64_t memoriaUsadaBytes{0};
     std::int64_t memoriaTotalBytes{0};
     std::vector<Evento> eventos;
+    // Intervalos CPU terminados, cronológicos, no superpuestos y con PID>0.
+    // Idle se infiere como los huecos en [0, tiempoSimuladoMs).
     std::vector<BloqueTimeline> timeline;
 };
 

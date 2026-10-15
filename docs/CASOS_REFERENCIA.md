@@ -1,6 +1,6 @@
 # Casos de referencia del simulador
 
-> **Adenda normativa para v2 candidata (2026-10-15):** P1–P13 debajo documentan escenarios de discusión y comportamiento v1/ramas; expectativas antiguas conflictivas no gobiernan v2. Casos destino aprobados — aún no implementados:
+> **Reglas operativas del destino v2 (formalizadas 2026-10-15; API aún candidata):** P1–P13 debajo son historial de discusión y comportamiento v1/ramas. Sus expectativas conflictivas no son tareas v2 ni gobiernan el futuro. Los casos aprobados describen destino aún no implementado:
 
 ## Escenarios v2 aprobados
 
@@ -12,7 +12,7 @@
 6. **WAIT simultáneo:** orden determinista exacto queda sujeto a ratificación de la propuesta listada en [decisiones aprobadas](DECISIONES_APROBADAS.md#propuestas-técnicas-no-ratificadas).
 7. **Cancelación:** READY/RUN/WAIT→CANCEL; terminales siguen en historial; CPU/timeline incluyen solo CPU efectivamente ejecutada y duración positiva. Punto seguro determinista aún requiere ratificación técnica.
 8. **Paso:** PAUSADO+READY ejecuta turno hasta cuota/WAIT/FINISH/CANCEL; sin READY pero WAIT, adelanta al despertar más próximo sin despacho en ese paso; sin trabajo activo finaliza.
-9. **Idle/vista:** intervalo CPU vacío sin PID ficticio; la vista reproduce RUN transitorio desde eventos/snapshots, no avanza reloj y ofrece historial, zoom y scroll.
+9. **Idle/timeline:** `BloqueTimeline` solo representa CPU ejecutado y exige PID positivo. A ejecuta `[0,8)`, entra WAIT y despierta en 18; CPU idle `[8,18)` no produce bloque ni PID especial. B ejecuta `[18,22)`; snapshot a `27` contiene solo bloques A `[0,8)` y B `[18,22)` e infiere idle `[8,18)` y `[22,27)`. Un evento idle puede explicar el primer hueco sin asociarlo a PID. El widget no avanza el reloj.
 10. **Memoria/historial:** representación proporcional por PID y espacio libre; procesos FINISH/CANCEL permanecen en historia aunque salgan de TL/liberen memoria.
 11. **Motores:** mismos pasos/entradas deben dar mismo reloj, prioridad, estados, eventos y timeline en lógico/concurrente; tiempo de threads no equivale a tiempo simulado.
 
@@ -47,7 +47,7 @@ TL inicial tiene tamaños 12, 40, 68 y 96. Llega un proceso de tamaño 180. `A` 
 
 Tres elementos con tamaño 50 producen `A=B=50`, `H=0`; con las dos comparaciones estrictas, cada elemento alcanza ELSE y resulta prioridad 3. Este es el resultado literal del pseudocódigo, no una confirmación de política para rango degenerado. La alternativa de caso especial requiere aprobación.
 
-## P4 — Cuota docente y quantum de equipo
+## P4 — Historial v1: cuota docente y quantum de equipo
 
 **Tipo:** ejemplo docente más política de equipo; precedencia pendiente DP-04.
 
@@ -67,7 +67,7 @@ En la escala académica, comparar un proceso P1, uno P2 y uno P3: `ObtenerMaxima
 
 Primera llamada: A y B están READY, prioridad 8, orden llegada A=1 y B=2; se elige A. Para simular A reingresado al final, segunda llamada: A=3 y B=2; se elige B. Esto describe exactamente lo que comprueba el caso de la prueba de empate del Scheduler, que prepara el nuevo `ordenLlegada` antes de seleccionar. En la implementación concurrente revisada, al finalizar `QUANTUM_AGOTADO` A vuelve a READY pero su `ordenLlegada` no se actualiza. Por tanto, la secuencia de dos turnos no queda demostrada de extremo a extremo y puede volver a favorecer A. No corregir código bajo esta documentación.
 
-## P7 — Aging del equipo
+## P7 — Historial v1: aging del equipo
 
 **Tipo:** decisión de equipo existente; coexistencia pendiente DP-10.
 
@@ -91,13 +91,13 @@ Capacidad 1000 bytes. A ocupa 600: carga exitosa, utilizada 600. B ocupa 500: no
 
 Representar sobre eje temporal CPU lógico ejecutando A `[0,20)`, B `[20,50)` y C `[50,60)`. Los anchos relativos deben ser 20:30:10. Las notas muestran segmentos coloreados de duración distinta para time-sharing (pág. 28); estos números solo ilustran proporcionalidad. El segmento pertenece al timeline, no a una tabla, cola, log o archivo exportado.
 
-## P11 — CPU sin READY
+## P11 — Historial v1: CPU sin READY
 
 **Tipo:** pendiente DP-08 y DP-07.
 
 Cuando todos los procesos estén WAIT, el motor concurrente avanza el reloj hasta que una espera termina. La GUI debe mostrar que el CPU no está ejecutando un proceso durante ese intervalo; la representación de ese intervalo como hueco o banda idle, y si se agrega al timeline como bloque, siguen sin decisión. Confirmar que tiempo de espera y timeline no atribuyan ejecución a un PID durante el intervalo.
 
-## P12 — Paso a paso
+## P12 — Historial v1: paso a paso
 
 **Tipo:** pendiente DP-07.
 
