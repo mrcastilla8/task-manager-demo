@@ -75,6 +75,10 @@ bool procesoConsistente(const Proceso& proceso) noexcept {
         default:
             return false;
     }
+    if (proceso.estado == Estado::FINISH &&
+        proceso.tiempoCpuRestanteMs != 0) {
+        return false;
+    }
     switch (proceso.prioridad) {
         case Prioridad::P1:
         case Prioridad::P2:

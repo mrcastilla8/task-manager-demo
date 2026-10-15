@@ -58,10 +58,30 @@ int main() {
     cpu.tiempoCpuConsumidoMs = 40;
     cpu.tiempoCpuRestanteMs = 60;
     EXPECT_TRUE(cpuConsistente(cpu));
+    EXPECT_TRUE(procesoConsistente(cpu));  // READY puede conservar CPU pendiente.
+    cpu.estado = Estado::RUN;
+    EXPECT_TRUE(procesoConsistente(cpu));
+    cpu.estado = Estado::WAIT;
+    EXPECT_TRUE(procesoConsistente(cpu));
+    cpu.estado = Estado::READY;
     cpu.tiempoCpuRestanteMs = 61;
     EXPECT_FALSE(cpuConsistente(cpu));
     cpu.tiempoCpuConsumidoMs = std::numeric_limits<std::int64_t>::max();
     EXPECT_FALSE(cpuConsistente(cpu));
+
+    Proceso finishPendiente = construirProcesoInicial(altaValida());
+    finishPendiente.estado = Estado::FINISH;
+    finishPendiente.tiempoCpuConsumidoMs = 50;
+    finishPendiente.tiempoCpuRestanteMs = 50;
+    EXPECT_FALSE(procesoConsistente(finishPendiente));
+    finishPendiente.tiempoCpuConsumidoMs = 100;
+    finishPendiente.tiempoCpuRestanteMs = 0;
+    EXPECT_TRUE(procesoConsistente(finishPendiente));
+    Proceso cancelPendiente = construirProcesoInicial(altaValida());
+    cancelPendiente.estado = Estado::CANCEL;
+    cancelPendiente.tiempoCpuConsumidoMs = 50;
+    cancelPendiente.tiempoCpuRestanteMs = 50;
+    EXPECT_TRUE(procesoConsistente(cancelPendiente));
 
     EXPECT_EQ(cuotaMs(Prioridad::P1), 10);
     EXPECT_EQ(cuotaMs(Prioridad::P2), 20);

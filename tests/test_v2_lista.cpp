@@ -53,7 +53,14 @@ int main() {
     invalido = proceso(4);
     invalido.pid = 0;
     EXPECT_FALSE(lista.agregar(invalido));
+    const Proceso antesFinishInvalido = *lista.buscar(2);
+    Proceso finishInvalido = proceso(5, Estado::FINISH);
+    finishInvalido.tiempoCpuConsumidoMs = 50;
+    finishInvalido.tiempoCpuRestanteMs = 50;
+    EXPECT_FALSE(lista.agregar(finishInvalido));
     EXPECT_EQ(lista.cantidad(), 3U);
+    EXPECT_TRUE(lista.buscar(5) == nullptr);
+    verificarProcesoSinCambios(lista.buscar(2), antesFinishInvalido);
     EXPECT_EQ(lista.buscar(2)->estado, Estado::WAIT);
     EXPECT_EQ(lista.buscar(2)->tiempoCpuConsumidoMs, 0);
     EXPECT_EQ(lista.buscar(2)->tiempoCpuRestanteMs, 100);
@@ -143,8 +150,8 @@ int main() {
     Proceso waitCpu = proceso(31, Estado::WAIT);
     Proceso cancelCpu = proceso(32);
     Proceso finishCpu = proceso(33, Estado::FINISH);
-    finishCpu.tiempoCpuConsumidoMs = 50;
-    finishCpu.tiempoCpuRestanteMs = 50;
+    finishCpu.tiempoCpuConsumidoMs = 100;
+    finishCpu.tiempoCpuRestanteMs = 0;
     Proceso runCpu = proceso(34);
     EXPECT_TRUE(cpuPorEstado.agregar(readyCpu));
     EXPECT_TRUE(cpuPorEstado.agregar(waitCpu));
@@ -240,6 +247,8 @@ int main() {
     p2.ticketReady = 11;
     Proceso terminal = proceso(103, Estado::FINISH);
     terminal.tamanioBytes = 1;
+    terminal.tiempoCpuConsumidoMs = terminal.tiempoCpuTotalMs;
+    terminal.tiempoCpuRestanteMs = 0;
     terminal.prioridad = Prioridad::P2;
     Proceso cancelado = proceso(104, Estado::CANCEL);
     cancelado.tamanioBytes = 1000;
