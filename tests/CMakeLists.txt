@@ -29,4 +29,5 @@ add_simulator_test(test_concurrent_pause)
 add_simulator_test(test_concurrent_cancel)
 add_simulator_test(test_concurrent_thread_shutdown)
 add_simulator_test(test_concurrent_race_safety)
+add_simulator_test(test_concurrent_scenarios)
 
