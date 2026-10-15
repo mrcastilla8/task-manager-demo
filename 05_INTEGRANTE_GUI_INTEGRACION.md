@@ -1,103 +1,76 @@
 # Integrante 5 — GUI, visualización e integración
 
-**Responsable:** Poma · **Rama:** `poma` · **Workflow:** [fase 4](docs/WORKFLOW_DESARROLLO.md#fase-4--gui-y-visualizacion)
+**Responsable:** Poma · **Rama:** `poma` · **Estado:** implementación futura, no presente en ramas auditadas. La plataforma aprobada para el destino v2 es Qt 6 + C++17 + CMake.
 
-Asignación recuperada de `origin/poma`. Qt 6 + C++ se conserva como **recomendación del equipo**, no requisito del docente ni toolkit aprobado. La GUI debe poder empezar con un mock mientras los motores avanzan.
+## Objetivo y límites
 
-## Principio de diseño y dependencias
+Construir la GUI e integrar el motor lógico de Aldana y el concurrente de Ángel mediante la misma interfaz v2. La GUI envía acciones y presenta snapshots/eventos; no ordena procesos, asigna prioridad, calcula cuota, aplica aging ni incluye planificación en widgets. La regla de v2 es prioridad automática P1–P3, cuota máxima 10/20/30 ms, sin quantum global configurable y sin aging activo. La asignación antigua de controles v1 no es instrucción v2.
 
-La GUI solamente envía acciones, consume snapshots/eventos y los presenta. No ordena procesos, asigna prioridades, ejecuta aging ni implementa quantum. Debe depender de la API real de `IExecutionEngine` (`agregarProceso`, `cancelarProceso`, `iniciar`, `pausar`, `reiniciar`, `siguientePaso`, `configurarQuantum`, `obtenerQuantum`, `obtenerEstado`) y de `EstadoSistema`; no copiar interfaces anteriores a v1.0.
+El destino de contrato sigue siendo **candidato a adopción, no operativo**. Revisar [contratos v2](docs/CONTRATOS_V2.md), [decisiones](docs/DECISIONES_APROBADAS.md) y [migración](docs/MIGRACION_CONTRATOS_V2.md). La semántica de códigos de resultado y cancelación idempotente está propuesta, pendiente de ratificación; no convertirla en requisito de DP-06.
 
-Comenzar con mock y fixtures de `EstadoSistema`. Integrar primero `SimulationEngine` y después `ConcurrentEngine`. La selección de modo cambia la instancia detrás de la misma interfaz, no la lógica visual. La regla de dos motores es decisión de equipo y no se deriva de que el profesor explique concurrencia.
+El modo continuo aún necesita ratificación de un driver no bloqueante para el motor lógico. La propuesta preferida usa timer cooperativo del loop Qt; revisar alternativas e impactos antes de cambiar la interfaz o los mocks en [propuestas técnicas](docs/PROPUESTAS_TECNICAS_V2.md).
 
-## Componentes y rutas propuestas
+## Dependencias y trabajo en paralelo
 
-- `gui/MainWindow.h/.cpp`: ventana principal, coordinación de controles y selección de motor.
-- `gui/ProcessTable.h/.cpp`: tabla de procesos y acción de cancelar.
-- `gui/QueueWidget.h/.cpp`: cola READY en orden publicado por Scheduler.
-- `gui/CPUWidget.h/.cpp`: proceso atendido, estado y progreso temporal disponible.
-- `gui/MemoryWidget.h/.cpp`: mapa conceptual y resúmenes de capacidad.
-- `gui/TimelineWidget.h/.cpp`: segmentos ordenados sobre eje temporal.
-- `gui/EventLogWidget.h/.cpp`: historial textual de eventos.
-- `gui/NewProcessDialog.h/.cpp`: formulario y validación de alta.
-- `main.cpp`: ensamblaje de ventana/motor.
+Poma puede empezar con mock/fixtures cuando se congele la interfaz, mientras Aldana y Ángel trabajan en paralelo tras contrato y Scheduler estables. Integrar primero motor lógico y después concurrente; ambos deben producir resultados observables equivalentes. Los threads concurrentes siguen representando un único CPU lógico. El refresco Qt no incrementa reloj ni cuenta como tiempo de CPU.
 
-Son rutas propuestas en la asignación de GUI, no archivos que existan en las ramas auditadas. Build/CMake se integra coordinadamente; esta tarea documental no los modifica. La asignación inicial no fija nombres de archivos de pruebas GUI; los escenarios abajo son criterios de integración, no una suite inventada como obligación.
+## Componentes y entregables
 
-## Pantalla y datos
+- `gui/MainWindow.h/.cpp`: ventana, controles y selección de motor detrás de interfaz común.
+- `gui/ProcessTable.h/.cpp`: procesos, prioridad P1–P3, estado/tiempos y cancelar.
+- `gui/QueueWidget.h/.cpp`: orden READY publicado por Scheduler.
+- `gui/CPUWidget.h/.cpp`: PID en RUN, prioridad, tiempo restante, cuota de turno fijada/progreso.
+- `gui/MemoryWidget.h/.cpp`: capacidad y mapa proporcional por PID y espacio libre; no direcciones ficticias.
+- `gui/TimelineWidget.h/.cpp`: intervalos reales de CPU, escala, zoom y desplazamiento.
+- `gui/EventLogWidget.h/.cpp`: eventos en milisegundos simulados e historial de sesión.
+- `gui/NewProcessDialog.h/.cpp`: alta sin prioridad manual; nombre, tamaño, CPU y E/S opcional.
+- `main.cpp`: ensamblaje de aplicación.
+
+Son entregables previstos; su mención no declara archivos implementados. Conservar las pruebas de integración existentes y verificar los escenarios listados abajo; no se impone aquí un nombre de archivo de test GUI que la asignación fuente no fijó.
+
+## Reglas de presentación
 
 ### Controles
 
-- Selector de modo “Simulación lógica” / “Threads reales” cuando ambas variantes estén integradas.
-- Quantum global, velocidad visual, agregar proceso, iniciar, pausar, paso siguiente y reiniciar.
-- Velocidades sugeridas por el equipo: `0.25x`, `0.5x`, `1x`, `2x`, `5x`. No son requisito del docente.
-- Desacoplar velocidad visual de quantum y tiempo simulado.
+Selector de motor lógico/concurrente, agregar, iniciar, pausar, paso siguiente y reiniciar. No exponer quantum global. La velocidad/animación visual, si se ofrece, solo cambia presentación; no equivale al tiempo lógico ni modifica el reloj.
 
-### Tabla de procesos
+### Proceso y cola
 
-Presentar identificador, nombre, tamaño, prioridad base y actual si aplica, estado, tiempo restante, espera y acción. No inventar una columna de cuota aprobada: en contrato v1.0 no existe; mostrarla solo después de una decisión y migración contractual.
+Alta no muestra campo de prioridad manual. La tabla usa la prioridad publicada por el motor y muestra la cuota vigente derivada como prioridad×10 si se desea; no guarda una segunda cuota editable. Durante RUN se muestra la cuota del turno fijada aunque el snapshot publique una clasificación vigente nueva para el próximo turno. La cola incluye solo READY y refleja exactamente orden prioridad descendente, ticket ascendente, PID ascendente.
 
-### Cola
+### CPU, memoria y timeline
 
-Representar solo procesos READY, con prioridad y orden que devuelve `EstadoSistema.colaPrioridad`. La GUI no reconstruye la selección con un orden propio. Resaltar o animar desplazamiento es sugerencia visual, no regla funcional. Debe quedar distinguible el FIFO de llegada inicial y la rotación tras quantum; el motor debe actualizar ticket/orden al reingresar según DP-05.
+CPU muestra un solo PID lógico en ejecución o vacío. RAM muestra ocupación proporcional por PID y espacio libre. Cada bloque del timeline representa CPU ejecutado con PID positivo y rango semiabierto `[inicio,fin)`. Idle no tiene bloque ni PID contractual: la vista infiere huecos entre origen de sesión 0, intervalos CPU y reloj simulado del snapshot; eventos idle pueden dar contexto sin fabricar un segmento.
 
-### CPU y temporizador
+Ejemplo: A ejecuta `[0,8)`, entra WAIT y el CPU queda sin ejecución hasta despertar en 18; B ejecuta `[18,22)`. Si el snapshot marca tiempo 27, almacenar solo A `[0,8)` y B `[18,22)`; mostrar como huecos idle `[8,18)` y `[22,27)`. No crear bloques con PID 0/-1. Pausar la aplicación sin avanzar el reloj no produce idle simulado.
 
-Mostrar PID/nombre del proceso atendido, estado RUN, prioridad vigente, tiempo restante y tiempo de intervalo disponible desde el snapshot. **Necesidad de GUI del equipo:** dar feedback visual al estado RUN aunque sea transitorio. Acordar la cadencia y el mecanismo de actualización de snapshots para que ese estado llegue a la vista. El refresco solo representa el reloj/estado publicado: no incrementa ni altera el tiempo simulado. Su cadencia de presentación queda en DP-08, separada de la semántica de avance del motor en DP-07. El equipo propone visualizar quantum actual/progreso; el contrato contiene quantum global y `Proceso.quantumConsumido`. No mostrar varios workers como CPUs simulados: el modelo es un CPU lógico. La velocidad visual solo controla la presentación.
+Retener la historia completa de sesión, permitir scroll/zoom y representar eventos/snapshots para RUN transitorio. Usar representación eficiente si se necesita, sin descartar el registro fuente. El replay no escribe al motor ni avanza reloj.
 
-### Memoria
+### Eventos
 
-Mostrar capacidad total, utilizada, disponible y procesos cargados; además, un mapa gráfico conceptual con porciones proporcionales identificadas por proceso. El código conserva tamaño por PID, no direcciones ni colocación física. No presentar un layout de direcciones real ni agregar paginación, segmentación, memoria virtual o reemplazo.
+Presentar alta/admisión, prioridades publicadas, despacho, ejecución CPU, cuota agotada, WAIT/retorno, fin, cancelación, idle y finalización del sistema, según contrato. Formatear timestamps simulados sin sustituirlos por tiempo de pared. El orden y snapshotting exactos se etiquetan propuesta hasta ratificación.
 
-### Timeline
+## Mock y escenarios de integración
 
-Debe ser una vista gráfica de segmentos de CPU sobre eje temporal; cada segmento se corresponde con `[inicio, fin)` y su anchura es proporcional a la duración. La retención/ventana del historial, escala, CPU idle, desplazamiento y zoom quedan pendientes DP-08. No se fija cuánto tiempo permanecen los segmentos visibles ni se garantiza conservar toda la sesión. No confundir con tabla, cola, log o exportación. No se pide PNG/HTML/PDF.
+El mock implementa `IExecutionEngine` v2 cuando se ratifique la API y permite preparar vistas de:
 
-### Registro de eventos
+1. READY con prioridades distintas y empate por ticket.
+2. RUN transitorio con cuota fijada, ejecución parcial y CPU restante.
+3. Reingreso a READY con ticket nuevo.
+4. WAIT con otro READY y retorno en un paso posterior.
+5. CPU idle inferido antes, entre y después de bloques de proceso.
+6. FINISH/CANCEL conservados en historial y memoria liberada en snapshot.
+7. RAM con varios procesos y hueco libre.
+8. Error/rechazo de alta sin mutar TL/prioridades.
+9. Misma traza de eventos/timeline para ambos motores.
 
-Presentar historial, no solo último evento: altas/admisión, cambios de estado, quantum, WAIT/retorno, finalización, prioridad y cancelación según tipos de `Evento`. Mostrar timestamps en milisegundos simulados con formato legible, sin alterar el valor del snapshot.
+Usar señales/slots o consulta desde el hilo UI; workers no actualizan widgets. QTimer puede repintar snapshots, pero nunca define paso/cuota ni reloj. Pruebas de integración deben cubrir que timeline solo contiene PID positivo y que los gaps se reconstruyen desde reloj snapshot.
 
-## Diálogo de alta y cancelación
+## Criterios de cierre GUI
 
-El diálogo propone campos Nombre, Tamaño, Tiempo total de CPU y Prioridad. Campos opcionales de E/S: habilitar, instante de bloqueo tras CPU y duración WAIT. Validar nombre no vacío, tamaño/tiempo positivos y prioridad conforme a la política seleccionada; mientras DP-01 siga abierta, no presentar una sola escala como docente y equipo indistintamente. La operación E/S debe ajustarse a validación de `procesoValido`.
-
-La acción de cancelar vive junto a cada proceso; puede pedir confirmación. Refrescar estado/eventos después de la llamada y mostrar estado CANCEL cuando lo reporte el motor. La cancelación durante RUN y la política sobre intervalo parcial permanecen pendientes DP-06.
-
-## Mock e integración
-
-El mock implementa todos los métodos de `IExecutionEngine` vigente y devuelve snapshots controlados. Preparar vistas estáticas de:
-
-1. Dos procesos READY en la cola.
-2. Un proceso RUN con intervalo parcial reflejado en CPU/timeline.
-   - La vista muestra el estado RUN transitorio a partir del snapshot; el refresco visual no adelanta el reloj simulado.
-3. Proceso que agota quantum y retorna a READY con orden actualizado después de que el motor aplique la política aprobada.
-4. Proceso WAIT con otro READY y retorno posterior.
-5. FINISH y CANCEL, incluida memoria liberada como indique snapshot.
-6. Memoria con más de un proceso y espacio disponible.
-7. CPU sin READY, sin atribuir ejecución a un proceso.
-
-El motor no notifica directamente widgets. En Qt, el equipo propone actualizar desde el hilo principal mediante signals/slots o consulta periódica con `QTimer`; el timer solo refresca/presenta snapshots y no define quantum. `QTimer` y Qt son detalles propuestos mientras no se ratifique DP-11.
-
-## Pruebas de integración visuales
-
-La asignación fuente no nombró archivos de tests GUI. Mantener los siguientes escenarios reproducibles dentro del mecanismo de pruebas/integración que el equipo elija:
-
-- Mock y ambos motores producen las mismas columnas, cola, CPU, memoria, eventos y bloques para snapshots equivalentes.
-- `agregarProceso` valida campos, refleja admisión y muestra error de memoria insuficiente sin inventar estado.
-- `cancelarProceso` actualiza fila, memoria/log y cola del snapshot; cubre PID inexistente según contrato.
-- Pausa, paso y reinicio activan los controles y actualizan vistas sin congelar ventana; semántica de paso condicionada a DP-07.
-- El estado RUN transitorio puede observarse mientras ocurre; el temporizador/refresco GUI no cambia el tiempo simulado.
-- Actualizaciones desde ConcurrentEngine llegan al hilo UI principal; carga concurrente de snapshots no toca widgets desde workers.
-- Timeline conserva orden, marcas de tiempo y proporciones; espera/idle no aparece como ejecución de PID.
-- Mapa refleja individualmente tamaños cargados, total y disponible sin direcciones físicas.
-- Velocidad visual cambia el ritmo de refresco sin cambiar el reloj/resultado simulado.
-
-## Criterios de aceptación
-
-- Componentes de pantalla y diálogo existen en las rutas propuestas y se integran sin lógica de scheduling.
-- GUI opera contra `IExecutionEngine`/`EstadoSistema`, no contra miembros internos del motor.
-- Cola, CPU, memoria, timeline y eventos no se confunden y reflejan un mismo snapshot.
-- Timeline tiene intervalos de anchura proporcional; memoria incluye ocupantes visuales.
-- Un solo CPU lógico es visible aunque haya threads reales internos.
-- Controles, pausa y actualización segura respetan decisiones DP-04, DP-06, DP-07 y DP-08.
-- Velocidades visuales se presentan como sugerencias del equipo, no requisitos académicos.
+- App Qt 6/C++17/CMake opera contra una interfaz común, mock y ambos motores.
+- Sin campo de prioridad manual, control de quantum global, aging o regla de Scheduler en widgets.
+- CPU lógico único; espera idle no se atribuye a proceso; RUN transitorio puede reproducirse.
+- Timeline conserva información completa, renderiza huecos sin PID y ofrece scroll/zoom.
+- La GUI no altera reloj simulado ni trata duración de animación como CPU.
+- Los escenarios y pruebas de integración se ejecutan después de implementar; la documentación actual no afirma PASS de módulos ausentes.

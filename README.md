@@ -1,33 +1,34 @@
 # ConcurrentSimulator
 
-ConcurrentSimulator es un proyecto C++17 para simular gráficamente la admisión y planificación de procesos, la ocupación de memoria y el uso de CPU mediante time-sharing. El repositorio reúne trabajo de varias ramas; la documentación distingue la implementación actual de los requisitos académicos y de las decisiones aún pendientes.
+ConcurrentSimulator es una propuesta C++17 para simular admisión y planificación de procesos, memoria y un CPU lógico con time-sharing.
 
-## Lectura inicial
+## Estado de contratos y decisiones
 
-1. [Indicaciones generales](00_INDICACIONES_GENERALES_PROYECTO.md)
-2. [Especificación funcional canónica](docs/ESPECIFICACION_FUNCIONAL.md)
-3. [Requisitos del docente y trazabilidad de fuentes](docs/REQUISITOS_DOCENTE.md)
-4. [Decisiones pendientes](docs/DECISIONES_PENDIENTES.md)
-5. [Contratos versión 1.0](contracts/README.md)
+Los encabezados [v1.0](contracts/README.md) permanecen congelados y vigentes para el código existente en `master`. La API [2.0](docs/CONTRATOS_V2.md) bajo `contracts/v2/` es **candidata a adopción**, no está integrada ni operativa. Las decisiones del equipo aprobadas para ese destino se registran en [DP-01–DP-11](docs/DECISIONES_APROBADAS.md); el [plan de migración](docs/MIGRACION_CONTRATOS_V2.md) no ejecuta esa migración.
 
-La [matriz de trazabilidad](docs/MATRIZ_TRAZABILIDAD.md) y los [casos de referencia](docs/CASOS_REFERENCIA.md) concentran la relación entre reglas, documentación, código y criterios verificables. Los [responsables y ramas](00_INDICACIONES_GENERALES_PROYECTO.md#responsabilidades-y-rutas) están formalizados en la guía general y el proceso completo de fases, dependencias, integración y PR está en [WORKFLOW_DESARROLLO.md](docs/WORKFLOW_DESARROLLO.md). Cada integrante debe leer además su asignación: [modelo y memoria](01_INTEGRANTE_MODELO_ESTRUCTURAS.md), [scheduler](02_INTEGRANTE_SCHEDULER.md), [motor lógico](03_INTEGRANTE_SIMULACION_LOGICA.md), [motor concurrente](04_INTEGRANTE_MOTOR_CONCURRENTE.md) o [GUI e integración](05_INTEGRANTE_GUI_INTEGRACION.md). Las reglas para agentes están en [AGENTS.md](AGENTS.md).
+DP-01–DP-11 fijan prioridad automática P1/P2/P3 por tamaño, TL formada por READY/RUN/WAIT, fórmula estricta exacta, cuotas fijas de 10/20/30 ms por despacho, orden READY prioridad-ticket-PID, cancelación y estados terminales, unidad del paso lógico, timeline/historial, lista simplemente enlazada futura, ausencia de aging activo y Qt 6/C++17/CMake con dos motores sobre una interfaz común. Son decisiones de equipo, no requisitos docentes adicionales.
 
-## Etiquetas de evidencia
+La selección del driver continuo, política de errores, protocolo reproducible de cancelación RUN y secuencia/replay de eventos siguen como propuestas técnicas por ratificar en [docs/PROPUESTAS_TECNICAS_V2.md](docs/PROPUESTAS_TECNICAS_V2.md); los contratos candidatos no están congelados ni operativos.
 
-- **CONFIRMADO_POR_DOCENTE:** aparece explícitamente en las notas o la transcripción; los detalles que la fuente omite pueden seguir pendientes.
-- **PROPUESTA_DOCENTE:** ejemplo o alternativa sin evidencia suficiente de obligatoriedad.
-- **DECISION_EQUIPO:** comportamiento documentado por el equipo y no atribuido al docente.
-- **PENDIENTE_CONFIRMACION:** contradicción, detalle insuficiente o precedencia aún sin resolver.
+## Auditoría de ramas
 
-Los archivos académicos se mantienen fuera del repositorio. Sus páginas y marcas de tiempo se citan como localizadores; no son enlaces a material publicado en GitHub.
+En `origin/master`, solo existen `core/` (con `std::list`) y los contratos v1.0. El Scheduler está en ramas remotas `brickzon` y `angel`; motor concurrente solo en `angel`; motor lógico y GUI no se encontraron en las seis ramas auditadas (`master`, `brickzon`, `aldana`, `angel`, `castilla`, `poma`). No se declara integración por existencia en una rama individual.
 
-## Estado del repositorio
+## Documentación
 
-En `origin/master`, los contratos compartidos están congelados en versión 1.0, el almacenamiento usa `std::list<Proceso>` y la memoria registra capacidad y tamaños cargados. El Scheduler y el motor concurrente están en ramas de integrantes; el motor lógico y la GUI no aparecen en las seis ramas auditadas. Qt 6 es una recomendación de la asignación de GUI, no una dependencia aprobada.
+- [Especificación funcional](docs/ESPECIFICACION_FUNCIONAL.md)
+- [Requisitos y fuentes docentes](docs/REQUISITOS_DOCENTE.md)
+- [Decisiones pendientes: historial y cierre](docs/DECISIONES_PENDIENTES.md)
+- [Decisiones aprobadas](docs/DECISIONES_APROBADAS.md)
+- [Contratos v1.0 y v2.0 candidata](contracts/README.md), [detalle v2](docs/CONTRATOS_V2.md)
+- [Casos de referencia](docs/CASOS_REFERENCIA.md) y [matriz de trazabilidad](docs/MATRIZ_TRAZABILIDAD.md)
+- [Workflow](docs/WORKFLOW_DESARROLLO.md)
+- Asignaciones [Castilla](01_INTEGRANTE_MODELO_ESTRUCTURAS.md), [Brickzon](02_INTEGRANTE_SCHEDULER.md), [Aldana](03_INTEGRANTE_SIMULACION_LOGICA.md), [Ángel](04_INTEGRANTE_MOTOR_CONCURRENTE.md), [Poma](05_INTEGRANTE_GUI_INTEGRACION.md)
+- [Guía de agentes](AGENTS.md)
 
-La política actual del equipo documenta prioridades 1–10 (10 máxima), quantum global configurable de 500 ms y aging cada 2,000 ms simulados. No son requisitos del docente. `AssignPriority()` asigna clases 1–3 por tamaño y `ObtenerMaximaPrioridad()` selecciona el valor mayor; por tanto, el algoritmo docente da precedencia a P3 sobre P2 y P1 (notas, págs. 24–25). Solo está pendiente decidir si se adopta esa escala o se adapta a 1–10 (DP-01); el conjunto de tareas y el recálculo dinámico se tratan por separado (DP-02).
+Las notas fuente del curso se mantienen fuera del repositorio; sus localizadores figuran en [REQUISITOS_DOCENTE.md](docs/REQUISITOS_DOCENTE.md).
 
-## Construcción y pruebas
+## Build de la base actual
 
 La rama base requiere compilador C++17, CMake 3.20 o posterior y CTest:
 
@@ -37,4 +38,4 @@ cmake --build build --config Debug
 ctest --test-dir build -C Debug --output-on-failure
 ```
 
-Estos comandos describen el flujo disponible; no afirman que se haya compilado o probado esta rama documental.
+Los comandos describen el flujo actual; la API v2 no forma parte del build principal en este cambio.
