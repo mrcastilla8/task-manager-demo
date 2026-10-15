@@ -386,8 +386,11 @@ void MainWindow::attachEngine(std::unique_ptr<EngineSession::Engine> engine, con
     refreshTimer_->stop();
     session_ = std::make_unique<EngineSession>(std::move(engine));
     snapshotHealthy_ = false;
+    snapshotPending_ = false;
+    actionPending_ = false;
     retry_.success();
     clearVisualContext();
+    updateControls(api::EstadoSistema{});
     scenarios_->setVisible(false);
     retryButton_->setVisible(true);
     banner_->setText("Sesión real v2 · " + label);

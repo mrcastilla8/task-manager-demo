@@ -5,6 +5,7 @@
 #include "gui/TimelineWidget.h"
 #include "gui/MemoryWidget.h"
 #include "gui/EventLogWidget.h"
+#include "gui/QueueWidget.h"
 #include "tests/TestSupport.h"
 #include <QApplication>
 #include <QCheckBox>
@@ -150,16 +151,22 @@ void checkFactories() {
     sources->setCurrentIndex(0);
     EXPECT_TRUE(banner->text().contains("DEMOSTRACIÓN CON FIXTURES"));
 }
-void addThroughDialog(gui::MainWindow& window, int pid) {
-    QTimer::singleShot(0, [&window, pid] {
+void addThroughDialog(gui::MainWindow& window, int pid, bool withIo = false,
+                     int bytes = 32, int cpuMs = 15) {
+    QTimer::singleShot(0, [&window, pid, withIo, bytes, cpuMs] {
         auto* dialog = dynamic_cast<gui::NewProcessDialog*>(
             QApplication::activeModalWidget());
         EXPECT_TRUE(dialog != nullptr);
         if (!dialog) return;
         dialog->findChild<QLineEdit*>("inputPid")->setText(QString::number(pid));
         dialog->findChild<QLineEdit*>("inputName")->setText("proceso real");
-        dialog->findChild<QLineEdit*>("inputBytes")->setText("32");
-        dialog->findChild<QLineEdit*>("inputCpu")->setText("15");
+        dialog->findChild<QLineEdit*>("inputBytes")->setText(QString::number(bytes));
+        dialog->findChild<QLineEdit*>("inputCpu")->setText(QString::number(cpuMs));
+        if (withIo) {
+            dialog->findChild<QCheckBox*>("inputIo")->setChecked(true);
+            dialog->findChild<QLineEdit*>("inputIoAfter")->setText("5");
+            dialog->findChild<QLineEdit*>("inputIoWait")->setText("5");
+        }
         dialog->accept();
     });
     button(window, "addProcess")->click();
@@ -172,26 +179,66 @@ void checkGuiRealEngines() {
             window.findChild<QTableView*>("processTable"));
         auto* timeline = findWidget<gui::TimelineWidget>(window);
         auto* memory = findWidget<gui::MemoryWidget>(window);
+        auto* queue = findWidget<gui::QueueWidget>(window);
         auto* events = dynamic_cast<gui::EventLogWidget*>(
             window.findChild<QTableView*>("eventLog"));
         auto* clock = window.findChild<QLabel*>("simulationClock");
         sources->setCurrentIndex(engineIndex);
         EXPECT_TRUE(pumpUntil([&] { return clock->text().contains("Pausado"); }));
 
-        addThroughDialog(window, 200 + engineIndex);
+        addThroughDialog(window, 200 + engineIndex, true);
         EXPECT_TRUE(pumpUntil([&] {
             return table->presentationModel()->rowCount() == 1 &&
                    table->presentationModel()->process(0)->estado == gui::api::Estado::READY;
         }));
         EXPECT_EQ(table->presentationModel()->process(0)->prioridad,
                   gui::api::Prioridad::P3);
+        addThroughDialog(window, 400 + engineIndex, false, 96, 2);
+        EXPECT_TRUE(pumpUntil([&] {
+            return table->presentationModel()->rowCount() == 2 &&
+                   table->presentationModel()->process(1)->estado == gui::api::Estado::READY;
+        }));
+        EXPECT_EQ(table->presentationModel()->process(0)->prioridad,
+                  gui::api::Prioridad::P1);
+        EXPECT_EQ(table->presentationModel()->process(1)->prioridad,
+                  gui::api::Prioridad::P3);
         EXPECT_TRUE(memory->toolTip().contains("32 bytes"));
+        EXPECT_TRUE(queue->item(0)->text().contains("P3"));
+        EXPECT_TRUE(queue->item(0)->text().contains(
+            QString("PID %1").arg(400 + engineIndex)));
         const auto timelineRevision = timeline->revision();
+        button(window, "step")->click();
+        EXPECT_TRUE(pumpUntil([&] {
+            return table->presentationModel()->process(1)->estado == gui::api::Estado::FINISH &&
+                   clock->text().contains("2 ms");
+        }));
+        EXPECT_EQ(table->presentationModel()->process(0)->prioridad,
+                  gui::api::Prioridad::P3);
+        EXPECT_TRUE(queue->item(0)->text().contains(
+            QString("PID %1").arg(200 + engineIndex)));
+        EXPECT_TRUE(memory->toolTip().contains("32 bytes"));
+        button(window, "step")->click();
+        EXPECT_TRUE(pumpUntil([&] {
+            return table->presentationModel()->process(0)->estado == gui::api::Estado::WAIT;
+        }));
+        EXPECT_TRUE(clock->text().contains("7 ms"));
+        EXPECT_EQ(table->presentationModel()->process(0)->tiempoCpuConsumidoMs, 5);
+        EXPECT_EQ(table->presentationModel()->process(0)->tiempoCpuRestanteMs, 10);
+        EXPECT_TRUE(memory->toolTip().contains("32 bytes"));
+        button(window, "step")->click();
+        EXPECT_TRUE(pumpUntil([&] {
+            return table->presentationModel()->process(0)->estado == gui::api::Estado::READY &&
+                   clock->text().contains("12 ms");
+        }));
+        EXPECT_TRUE(queue->item(0)->text().contains(
+            QString("PID %1").arg(200 + engineIndex)));
         button(window, "step")->click();
         EXPECT_TRUE(pumpUntil([&] {
             return table->presentationModel()->process(0)->estado == gui::api::Estado::FINISH;
         }));
-        EXPECT_TRUE(clock->text().contains("15 ms"));
+        EXPECT_TRUE(clock->text().contains("22 ms"));
+        EXPECT_EQ(table->presentationModel()->process(0)->tiempoCpuConsumidoMs, 15);
+        EXPECT_EQ(table->presentationModel()->process(0)->tiempoCpuRestanteMs, 0);
         EXPECT_TRUE(timeline->revision() > timelineRevision);
         EXPECT_TRUE(memory->toolTip().isEmpty());
         EXPECT_TRUE(events->presentationModel()->rowCount() >= 5);
@@ -215,6 +262,34 @@ void checkGuiRealEngines() {
         }));
         EXPECT_TRUE(memory->toolTip().isEmpty());
     }
+}
+void checkSwitchWithPendingAction() {
+    gui::MainWindow window;
+    auto* sources = window.findChild<QComboBox*>("engineSource");
+    auto* table = dynamic_cast<gui::ProcessTable*>(
+        window.findChild<QTableView*>("processTable"));
+    auto* clock = window.findChild<QLabel*>("simulationClock");
+    sources->setCurrentIndex(1);
+    EXPECT_TRUE(pumpUntil([&] { return clock->text().contains("Pausado"); }));
+    addThroughDialog(window, 501);
+    EXPECT_TRUE(pumpUntil([&] {
+        return table->presentationModel()->rowCount() == 1 &&
+               table->presentationModel()->process(0)->pid == 501;
+    }));
+
+    // Cambiar el motor inmediatamente después de encolar un paso invalida la
+    // publicación tardía de la sesión anterior y destruye su worker serial.
+    button(window, "step")->click();
+    sources->setCurrentIndex(2);
+    EXPECT_TRUE(pumpUntil([&] {
+        return clock->text().contains("Pausado") &&
+               table->presentationModel()->rowCount() == 0;
+    }));
+    addThroughDialog(window, 502);
+    EXPECT_TRUE(pumpUntil([&] {
+        return table->presentationModel()->rowCount() == 1 &&
+               table->presentationModel()->process(0)->pid == 502;
+    }));
 }
 void checkSession(bool failInitially) {
     gui::MainWindow window;
@@ -329,6 +404,7 @@ int main(int argc, char** argv) {
     checkForm();
     checkFactories();
     checkGuiRealEngines();
+    checkSwitchWithPendingAction();
     checkSession(false);
     checkSession(true);
     return test::finish();
